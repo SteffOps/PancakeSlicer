@@ -81,6 +81,7 @@ struct ConformalEmitParams
     double       coast_length  = 0.;
     bool         open_end      = false;
     bool         scored        = false;
+    bool         bead_tags     = false;
     PressureAdvanceTracker *pressure_advance = nullptr;
     std::function<double(const Vec3d &tip, const Vec3d &axis)> clearance;
     double       margin = 0.;

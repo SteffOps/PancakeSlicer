@@ -572,7 +572,13 @@ double emit_conformal_extrusion(GCodeWriter &writer, const std::vector<Conformal
         else {
             ToolPose to_pose = b.pose;
             to_pose.tip.z() += lift[m.end];
+            const double run = (b.pose.tip - a.pose.tip).norm();
+            if (params.bead_tags && dE > 0. && height > 0.f && run > EPSILON) {
+                std::snprintf(buf, sizeof(buf), "h%.4f w%.4f", double(height), v / (run * double(height)));
+                writer.set_line_tag(buf);
+            }
             writer.extrude_to_pose(out, to_pose, dE, params.comment);
+            writer.set_line_tag({});
         }
         if (deposit)
             for (size_t k = i; k < m.end; ++k)

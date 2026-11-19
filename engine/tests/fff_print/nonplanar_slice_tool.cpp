@@ -4099,6 +4099,8 @@ int main(int argc, char **argv)
             }
             for (size_t r = 0; r < object.regions.size(); ++r)
                 std::cout << "nonplanar_region " << r << " " << object.regions[r] << "\n";
+            if (!object.staged.empty())
+                std::cout << "nonplanar_staged " << object.name << ": " << object.staged << "\n";
             for (const Nonplanar::ReportPatch &patch : report.patches)
                 if (patch.object == i)
                     std::cout << "nonplanar_patch " << patch.id << " kind " << patch.kind << " region " << patch.region << " band "

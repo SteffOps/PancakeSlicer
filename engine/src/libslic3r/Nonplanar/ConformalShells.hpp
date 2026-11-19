@@ -103,6 +103,11 @@ struct ConformalPatch
     Vec3d      layer_normal { Vec3d::Zero() };
     bool       native = false;
     bool       banded = false;
+    int        staged_piece = -1;
+    int        staged_level = -1;
+    bool       staged_round = false;
+    bool       staged_last  = false;
+    std::string staged_label;
     std::shared_ptr<const AutoPatchSettings> automatic;
     std::shared_ptr<const FieldChart> field;
 
@@ -143,6 +148,7 @@ struct ConformalResult
     std::vector<PatchBase>        base;
     std::vector<BaseInput>        base_inputs;
     bool                          layer_changes_filament = false;
+    std::string                   staged_report;
     std::vector<double>           event_cuts;
     std::vector<std::pair<double, unsigned int>> tool_changes;
     bool                          ordered_plan = false;

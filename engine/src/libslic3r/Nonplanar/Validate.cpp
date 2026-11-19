@@ -1,5 +1,6 @@
 #include "Validate.hpp"
 #include "Multiplanar.hpp"
+#include "Staged.hpp"
 #include "libslic3r/PrintBase.hpp"
 
 #include "AutoMode.hpp"
@@ -26,6 +27,7 @@
 #include <cstddef>
 #include <initializer_list>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -114,8 +116,8 @@ StringObjectException validate(const Print &print, std::vector<StringObjectExcep
         const bool          field = mode == NonplanarMode::Field || mode == NonplanarMode::OneShot;
         if (mode == NonplanarMode::ConformalLayers) {
             needs_head = enabled = true;
-            if (config.nonplanar_kinematics.value != RotaryLayout::None || config.spiral_mode || config.belt_printer)
-                return { L("Conformal layers need a fixed 3-axis printer (no spiral vase or belt printing, please!)."),
+            if (config.spiral_mode || config.belt_printer)
+                return { L("Conformal layers can't be combined with spiral vase or belt printing."),
                          object, "nonplanar_mode" };
             if (object->num_printing_regions() != 1 || object->model_object()->is_mm_painted())
                 return { L("Conformal layers need just one material and one set of part settings."), object, "nonplanar_mode" };
@@ -124,16 +126,16 @@ StringObjectException validate(const Print &print, std::vector<StringObjectExcep
         }
         if (mode == NonplanarMode::SmoothMorph) {
             needs_head = enabled = true;
-            if (config.nonplanar_kinematics.value != RotaryLayout::None || config.spiral_mode || config.belt_printer)
-                return { L("Smooth morph requires a fixed 3-axis printer without spiral vase or belt printing."),
+            if (config.spiral_mode || config.belt_printer)
+                return { L("Smooth morph can't be combined with spiral vase or belt printing."),
                          object, "nonplanar_mode" };
             if (object->num_printing_regions() != 1 || object->model_object()->is_mm_painted())
                 return { L("Smooth morph requires one material and one set of part settings."), object, "nonplanar_mode" };
         }
         if (mode == NonplanarMode::Slant) {
             needs_head = enabled = true;
-            if (config.nonplanar_kinematics.value != RotaryLayout::None || config.spiral_mode || config.belt_printer)
-                return { L("Slant needs a fixed 3-axis printer (no spiral vase or belt printing)."), object, "nonplanar_mode" };
+            if (config.spiral_mode || config.belt_printer)
+                return { L("Slant can't be combined with spiral vase or belt printing."), object, "nonplanar_mode" };
             if (object->num_printing_regions() != 1 || object->model_object()->is_mm_painted())
                 return { L("Slant needs just one material and one set of part settings."), object, "nonplanar_mode" };
             if (object->config().raft_layers.value > 0)
@@ -159,6 +161,13 @@ StringObjectException validate(const Print &print, std::vector<StringObjectExcep
             return { (boost::format(_u8L("Max curved top angle has to be between 0° and %1%° — steeper angles are out "
                                         "of reach.")) % max_angle).str(),
                      object, "nonplanar_curved_max_angle" };
+        if (mode == NonplanarMode::Staged) {
+            needs_head = enabled = true;
+            if (config.spiral_mode || config.belt_printer)
+                return { L("Staged regions cannot be combined with spiral vase mode or a belt printer."), object, "nonplanar_mode" };
+            if (const std::string why = staged_invalid(*object); !why.empty())
+                return { why, object, "nonplanar_mode" };
+        }
         if (mode == NonplanarMode::Multiplanar || field) {
             multiplanar_instances += object->instances().size();
             needs_head = enabled = true;
@@ -263,7 +272,11 @@ StringObjectException validate(const Print &print, std::vector<StringObjectExcep
             return { L("Rotary axes cannot be combined with a belt printer or G-code axis remapping."), nullptr, "nonplanar_kinematics" };
         if (instances > 1 && config.print_sequence != PrintSequence::ByObject)
             return { L("With rotary axes, several objects can only be printed in \"By object\" sequence."), nullptr, "print_sequence" };
-        if (config.rotary_tool_length.value <= 0. && !config.rotary_firmware_rtcp)
+        if (const std::string &letters = config.rotary_axis_letters.value;
+            !letters.empty() && (letters.size() != 2 || letters[0] == letters[1] ||
+                                 std::any_of(letters.begin(), letters.end(), [](char c) { return c < 'A' || c > 'Z' || std::string_view("XYZEFGIJKMNPRST").find(c) != std::string_view::npos; })))
+            return { L("Rotary axis letters must be two different axis letters, for example UV."), nullptr, "rotary_axis_letters" };
+        if (config.rotary_tool_length.value <= 0. && !config.rotary_firmware_rtcp && config.rotary_feed_mode.value != RotaryFeedMode::RTCP)
             return { L("Rotary axes need the tool length, or tool center point control in the firmware."), nullptr, "rotary_tool_length" };
     }
 

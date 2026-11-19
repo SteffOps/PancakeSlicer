@@ -546,6 +546,7 @@ protected:
     bool            conformal_keep_primed(ExtrusionRole from, const ExtrusionPathConformal *next,
                                          const ExtrusionPathConformal *prev = nullptr);
     std::string     extrude_multiplanar_chunk(const Nonplanar::ConformalPatch &patch);
+    std::string     staged_travel(const ToolPose &target);
     std::string     extrude_field_patch(const Nonplanar::ConformalPatch &patch);
     std::string     travel_above_nonplanar(const Polyline &travel, const std::string &comment, double z);
     void            emit_conformal_moves(std::string &gcode, const ExtrusionPathConformal &path, double e_per_mm,
@@ -695,6 +696,9 @@ protected:
     float                               m_last_layer_z{ 0.0f };
     float                               m_max_layer_z{ 0.0f };
     double                              m_nonplanar_ceiling{ 0. };
+    double                              m_staged_reach{ 0. };
+    bool                                m_staged_started{ false };
+    bool                                m_staged_emit{ false };
     std::unique_ptr<MaterialColumns>      m_material_columns;
     std::unique_ptr<TableGuard>           m_table_guard;
     size_t                                m_table_clamped = 0;

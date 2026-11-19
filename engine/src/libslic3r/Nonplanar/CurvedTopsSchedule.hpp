@@ -46,6 +46,8 @@ struct NonplanarClearanceModel
     double bead_margin = 0.02;
     double sample_step = 0.1;
     double contact_tolerance = 0.;
+    // Contact allowed for the heater block and body boxes; the nozzle rings use contact_tolerance.
+    double block_tolerance = 0.;
     std::vector<Ring> nozzle;
     std::vector<Box> boxes;
     std::vector<Ring> rings() const { return nozzle; }

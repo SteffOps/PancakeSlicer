@@ -740,6 +740,14 @@ static const t_config_enum_values s_keys_map_RotaryLayout = {
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(RotaryLayout)
 
+static const t_config_enum_values s_keys_map_RotaryFeedMode = {
+    { "xyz",          int(RotaryFeedMode::XYZ)         },
+    { "inverse_time", int(RotaryFeedMode::InverseTime) },
+    { "rtcp",         int(RotaryFeedMode::RTCP)        },
+    { "rrf_combined", int(RotaryFeedMode::RRFCombined) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(RotaryFeedMode)
+
 static const t_config_enum_values s_keys_map_NonplanarTopPattern = {
     { "contour",     int(NonplanarTopPattern::Contour)     },
     { "rectilinear", int(NonplanarTopPattern::Rectilinear) },
@@ -809,7 +817,8 @@ static const t_config_enum_values s_keys_map_NonplanarMode = {
     { "smooth_morph", int(NonplanarMode::SmoothMorph) },
     { "nonplanar_top", int(NonplanarMode::NonplanarTop) },
     { "slant", int(NonplanarMode::Slant) },
-    { "conformal_layers", int(NonplanarMode::ConformalLayers) }
+    { "conformal_layers", int(NonplanarMode::ConformalLayers) },
+    { "staged", int(NonplanarMode::Staged) }
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(NonplanarMode)
 
@@ -828,6 +837,16 @@ static const t_config_enum_values s_keys_map_NonplanarDeform = {
     { "optimized",  int(NonplanarDeform::Optimized)  }
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(NonplanarDeform)
+
+static const t_config_enum_values s_keys_map_StagedLayerStyle = {
+    { "flat", int(StagedLayerStyle::Flat) }, { "hinge", int(StagedLayerStyle::Hinge) }, { "grow_cone", int(StagedLayerStyle::GrowCone) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(StagedLayerStyle)
+
+static const t_config_enum_values s_keys_map_StagedTool = {
+    { "follow", int(StagedTool::Follow) }, { "fixed_tilt", int(StagedTool::FixedTilt) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(StagedTool)
 
 static const t_config_enum_values s_keys_map_PrimeVolumeMode = {
     { "Default", pvmDefault },
@@ -5588,6 +5607,7 @@ void PrintConfigDef::init_fff_params()
     def->enum_values.push_back("nonplanar_top");
     def->enum_values.push_back("slant");
     def->enum_values.push_back("conformal_layers");
+    def->enum_values.push_back("staged");
     def->enum_labels.push_back(L("Flat layers"));
     def->enum_labels.push_back(L("Auto"));
     def->enum_labels.push_back(L("Manual"));
@@ -5598,8 +5618,112 @@ void PrintConfigDef::init_fff_params()
     def->enum_labels.push_back(L("Curved tops"));
     def->enum_labels.push_back(L("Slant"));
     def->enum_labels.push_back(L("Conformal layers"));
+    def->enum_labels.push_back(L("Staged regions (advanced)"));
     def->mode     = comSimple;
     def->set_default_value(new ConfigOptionEnum<NonplanarMode>(NonplanarMode::Off));
+
+    def = this->add("staged_stage", coInt);
+    def->label    = L("Stage");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions: stages print in order. Parts in the same stage print interleaved, each advancing one level in turn.");
+    def->min      = 1;
+    def->mode     = comDevelop;
+    def->set_default_value(new ConfigOptionInt(1));
+
+    def = this->add("staged_layer_style", coEnum);
+    def->label    = L("Layer style");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions: how this part's layers stack. Flat: flat layers along the axis direction. Hinge: wedge layers "
+                      "turning about the hinge axis. Grow from cone: layers at constant distance out from a cone about the axis.");
+    def->enum_keys_map = &ConfigOptionEnum<StagedLayerStyle>::get_enum_values();
+    def->enum_values   = { "flat", "hinge", "grow_cone" };
+    def->enum_labels   = { L("Flat"), L("Hinge"), L("Grow from cone") };
+    def->mode          = comDevelop;
+    def->set_default_value(new ConfigOptionEnum<StagedLayerStyle>(StagedLayerStyle::Flat));
+
+    def = this->add("staged_axis_point", coPoint3);
+    def->label    = L("Axis point");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions: a point on the layer style's axis, in the assembly's own coordinates.");
+    def->sidetext = L("mm");
+    def->mode     = comDevelop;
+    def->set_default_value(new ConfigOptionPoint3(Vec3d(0., 0., 0.)));
+
+    def = this->add("staged_axis_dir", coPoint3);
+    def->label    = L("Axis direction");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions: flat: the build direction. Hinge: the hinge axis direction. Grow from cone: the cone axis, "
+                      "pointing from base to apex.");
+    def->mode     = comDevelop;
+    def->set_default_value(new ConfigOptionPoint3(Vec3d(0., 0., 1.)));
+
+    def = this->add("staged_hinge_start", coPoint3);
+    def->label    = L("Hinge start normal");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions, hinge: normal of the start plane. Layer 0 advances this way and later layers turn about the "
+                      "hinge axis, right-handed about its direction.");
+    def->mode     = comDevelop;
+    def->set_default_value(new ConfigOptionPoint3(Vec3d(0., 0., 1.)));
+
+    def = this->add("staged_hinge_angle", coFloat);
+    def->label    = L("Hinge angle");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions, hinge: the total turn of the layers.");
+    def->sidetext = u8"°";
+    def->min      = 0;
+    def->max      = 360;
+    def->mode     = comDevelop;
+    def->set_default_value(new ConfigOptionFloat(90.));
+
+    def = this->add("staged_cone_half_angle", coFloat);
+    def->label    = L("Cone half angle");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions, grow from cone: 0 is a cylinder about the axis, 90 a plane.");
+    def->sidetext = u8"°";
+    def->min      = 0;
+    def->max      = 90;
+    def->mode     = comDevelop;
+    def->set_default_value(new ConfigOptionFloat(45.));
+
+    def = this->add("staged_cone_radius", coFloat);
+    def->label    = L("Cone radius");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions, grow from cone: radius of the seed surface at the axis point.");
+    def->sidetext = L("mm");
+    def->min      = 0;
+    def->mode     = comDevelop;
+    def->set_default_value(new ConfigOptionFloat(0.));
+
+    def = this->add("staged_tool", coEnum);
+    def->label    = L("Tool direction");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions: Follow points the nozzle along the layer normal. Fixed tilt holds the table tilt and turns the "
+                      "turntable to follow the path.");
+    def->enum_keys_map = &ConfigOptionEnum<StagedTool>::get_enum_values();
+    def->enum_values   = { "follow", "fixed_tilt" };
+    def->enum_labels   = { L("Follow layers"), L("Fixed tilt") };
+    def->mode          = comDevelop;
+    def->set_default_value(new ConfigOptionEnum<StagedTool>(StagedTool::Follow));
+
+    def = this->add("staged_tool_tilt", coFloat);
+    def->label    = L("Tool tilt");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions, fixed tilt: the table tilt held while printing this part.");
+    def->sidetext = u8"°";
+    def->min      = 0;
+    def->max      = 120;
+    def->mode     = comDevelop;
+    def->set_default_value(new ConfigOptionFloat(0.));
+
+    def = this->add("staged_copies", coInt);
+    def->label    = L("Copies");
+    def->category = L("Quality");
+    def->tooltip  = L("Staged regions: copies of this part about the vertical axis through the assembly origin. Copies print "
+                      "interleaved like parts of the same stage.");
+    def->min      = 1;
+    def->max      = 64;
+    def->mode     = comDevelop;
+    def->set_default_value(new ConfigOptionInt(1));
 
     def = this->add("nonplanar_continuous_top", coBool);
     def->label = L("Continuous curved top");
@@ -6063,6 +6187,15 @@ void PrintConfigDef::init_fff_params()
     def->mode     = comAdvanced;
     def->set_default_value(new ConfigOptionFloat(0));
 
+    def = this->add("rotary_plate_overhang", coBool);
+    def->label    = L("Parts may overhang the plate");
+    def->category = L("Non-planar");
+    def->tooltip  = L("For small rotary tables, only the footprint where a part rests on the plate has to lie inside the "
+                      "printable area; the rest of the part may reach past the plate edge. Head, table and cradle clearance "
+                      "is still checked for every move.");
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionBool(false));
+
     def = this->add("rotary_linear_moves_table", coBools);
     def->label    = L("Linear axis carries the table");
     def->category = L("Non-planar");
@@ -6103,6 +6236,33 @@ void PrintConfigDef::init_fff_params()
                       "in minutes. Enable only if the controller supports G93; ordinary moves return to G94.");
     def->mode     = comAdvanced;
     def->set_default_value(new ConfigOptionBool(false));
+
+    def = this->add("rotary_axis_letters", coString);
+    def->label    = L("Rotary axis letters");
+    def->category = L("Non-planar");
+    def->tooltip  = L("G-code letters of the two rotary axes, tilt axis first and turntable axis second, for example UV. "
+                      "Empty uses the letters of the rotary layout (BC, AC or AB).");
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionString(""));
+
+    def = this->add("rotary_feed_mode", coEnum);
+    def->label    = L("Rotary feed mode");
+    def->category = L("Non-planar");
+    def->tooltip  = L("How the firmware reads F on moves that turn a rotary axis. XYZ: F is the speed along the linear axes. "
+                      "Inverse time: G93, F is the reciprocal of the move duration. Tool center point: the firmware moves "
+                      "the tip at F. RepRapFirmware combined: F applies to the length of the whole XYZ plus rotary move, "
+                      "with degrees counted as millimetres. The inverse time and tool center point switches still apply.");
+    def->enum_keys_map = &ConfigOptionEnum<RotaryFeedMode>::get_enum_values();
+    def->enum_values.push_back("xyz");
+    def->enum_values.push_back("inverse_time");
+    def->enum_values.push_back("rtcp");
+    def->enum_values.push_back("rrf_combined");
+    def->enum_labels.push_back(L("XYZ"));
+    def->enum_labels.push_back(L("Inverse time (G93)"));
+    def->enum_labels.push_back(L("Tool center point (RTCP)"));
+    def->enum_labels.push_back(L("RepRapFirmware combined XYZ + rotary"));
+    def->mode     = comAdvanced;
+    def->set_default_value(new ConfigOptionEnum<RotaryFeedMode>(RotaryFeedMode::XYZ));
 
     def = this->add("nonplanar_max_tilt", coFloat);
     def->label    = L("Maximum tool tilt");

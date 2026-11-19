@@ -34,6 +34,7 @@
 #include <assert.h>
 #include "libslic3r/Config.hpp"
 #include "libslic3r/GCodeWriter.hpp"
+#include "libslic3r/GCode/ToolKinematics.hpp"
 #include "libslic3r/PrintConfig.hpp"
 
 namespace Slic3r {
@@ -55,7 +56,7 @@ void CoolingBuffer::reset(const Vec3d &position)
 {
     m_nominal_feed = m_emitted_feed = 0.;
     m_belt_band_active = false;
-    m_current_pos.assign(7, 0.f);
+    m_current_pos.assign(9, 0.f);
     m_current_pos[0] = float(position.x());
     m_current_pos[1] = float(position.y());
     m_current_pos[2] = float(position.z());
@@ -378,6 +379,9 @@ std::vector<PerExtruderAdjustments> CoolingBuffer::parse_layer_gcode(const std::
 
     bool layer_had_extrusion = false;
     const bool rotary_printer  = m_config.nonplanar_kinematics.value != RotaryLayout::None;
+    const ToolKinematics &kinematics = m_gcodegen.writer().tool_kinematics();
+    const char rotary_letters[2] = { rotary_printer ? kinematics.rotary_axes()[0].letter : '\0', rotary_printer ? kinematics.rotary_axes()[1].letter : '\0' };
+    const bool combined_feed = rotary_printer && kinematics.combined_feed();
     bool       nonplanar_block = false;
 
     for (; *line_start != 0; line_start = line_end)
@@ -418,8 +422,9 @@ std::vector<PerExtruderAdjustments> CoolingBuffer::parse_layer_gcode(const std::
 
                 size_t axis = (*c >= 'X' && *c <= 'Z') ? (*c - 'X') :
                               (*c == 'E') ? 3 : (*c == 'F') ? 4 :
-                              (*c == 'I') ? 5 : (*c == 'J') ? 6 : size_t(-1);
-                if (*c >= 'A' && *c <= 'C')
+                              (*c == 'I') ? 5 : (*c == 'J') ? 6 :
+                              (*c == rotary_letters[0]) ? 7 : (*c == rotary_letters[1]) ? 8 : size_t(-1);
+                if ((*c >= 'A' && *c <= 'C') || axis == 7 || axis == 8)
                     rotary = true;
                 if (axis != size_t(-1)) {
                     ++ c;
@@ -440,6 +445,9 @@ std::vector<PerExtruderAdjustments> CoolingBuffer::parse_layer_gcode(const std::
                 const float feed = inline_f > 0.f ? inline_f : 60.f * current_pos[4];
                 if (inverse_time)
                     line.time = inline_f > 0.f ? 60.f / inline_f : 0.f;
+                else if (feed > 0.f && combined_feed)
+                    line.time = 60.f * std::sqrt(Vec3f(new_pos[0] - current_pos[0], new_pos[1] - current_pos[1], new_pos[2] - current_pos[2]).squaredNorm() +
+                                                 sqr(new_pos[7] - current_pos[7]) + sqr(new_pos[8] - current_pos[8])) / feed;
                 else if (feed > 0.f)
                     line.time = 60.f * Vec3f(new_pos[0] - current_pos[0], new_pos[1] - current_pos[1], new_pos[2] - current_pos[2]).norm() / feed;
                 line.time_max = line.time;

@@ -3312,6 +3312,9 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
     for (const PrintObject *object : print.objects())
         if (curved_tops_mode(object->config().nonplanar_mode.value)) {
             m_nonplanar_clearance = NonplanarClearanceModel::for_object(*object, object->config().layer_height.value);
+            // Rotary printers keep travels a bead's half height clear of the material, so no tip drags over fresh roads.
+            if (print.config().nonplanar_kinematics.value != RotaryLayout::None)
+                m_nonplanar_clearance.safety_mm = std::max(m_nonplanar_clearance.safety_mm, 0.15);
             size_t planned_paths = 0;
             const size_t paths = nonplanar_plan_fingerprint(*object);
             const NonplanarDeferral *planned = object->wide_tops_plan(planned_paths);
@@ -8584,6 +8587,8 @@ std::string GCode::extrude_conformal_patches(const Print &print, const std::vect
                     continue;
                 }
                 if (patch.kind == Nonplanar::PatchKind::Chunk) {
+                    if (patch.staged_round)
+                        gcode += this->curved_level_marker(print, std::max(double(m_max_layer_z), patch.z_max));
                     gcode += this->extrude_multiplanar_chunk(patch);
                     m_max_layer_z = std::max(m_max_layer_z, float(patch.z_max));
                     continue;
@@ -8859,7 +8864,7 @@ std::string GCode::extrude_conformal_path(const ExtrusionPathConformal &path, co
 
     m_wipe.reset_path();
 
-    if (!path.entry_travel.points.empty()) {
+    if (!path.entry_travel.points.empty() && !m_staged_emit) {
         auto pose_at = [this, &path](size_t i) {
             const Point3 &p = path.entry_travel.points[i];
             const Vec2d xy = this->point_to_gcode(p.to_point());
@@ -9078,7 +9083,8 @@ bool GCode::conformal_short_hop(const ExtrusionPathConformal &path, const Extrus
     using namespace Nonplanar;
     const bool in_band = this->conformal_in_band(&path, next);
     if (next == nullptr || (!in_band && next->patch_id != path.patch_id) || !m_material_columns || m_writer.filament() == nullptr ||
-        !next->tool_axis.empty() || !this->rotary_at_home() || next->polyline.points.size() < 2)
+        !next->tool_axis.empty() || !this->rotary_at_home() || next->polyline.points.size() < 2 ||
+        (m_config.nonplanar_kinematics.value != RotaryLayout::None && m_config.nonplanar_mode.value != NonplanarMode::Staged))
         return false;
     const Vec2d  xy   = this->point_to_gcode(next->first_point());
     const Vec3d &here = m_writer.get_position();
@@ -9123,6 +9129,9 @@ std::string GCode::extrude_multiplanar_chunk(const Nonplanar::ConformalPatch &pa
     double       top     = -std::numeric_limits<double>::infinity();
     m_wipe.reset_path();
     double       ceiling = -std::numeric_limits<double>::infinity();
+    const Vec2d  bed     = BoundingBoxf(m_config.printable_area.values).center();
+    const Vec3d  plate(bed.x(), bed.y(), 0.);
+    const bool   staged  = patch.staged_piece >= 0;
     const auto   to_writer = [this](const Point3 &p) {
         const Vec2d xy = this->point_to_gcode(p.to_point());
         return Vec3d(xy.x(), xy.y(), m_nominal_z + unscale<double>(p.z()));
@@ -9149,6 +9158,8 @@ std::string GCode::extrude_multiplanar_chunk(const Nonplanar::ConformalPatch &pa
         for (const ExtrusionEntity *ee : patch.shell_paths[k].entities)
             if (const auto *path = dynamic_cast<const ExtrusionPathConformal *>(ee); path != nullptr && path->polyline.points.size() >= 2)
                 paths.emplace_back(path);
+        if (patch.staged_piece >= 0)
+            gcode += ";STAGED piece=" + patch.staged_label + " level=" + std::to_string(patch.staged_level) + "\n";
         enum class Reach { Lift, Retracted, Primed } reach = Reach::Lift;
         auto outer = [](const ExtrusionPathConformal &p) { return p.role() == erExternalPerimeter || p.role() == erOverhangPerimeter; };
         for (size_t i = 0; i < paths.size(); ++i) {
@@ -9164,7 +9175,17 @@ std::string GCode::extrude_multiplanar_chunk(const Nonplanar::ConformalPatch &pa
                     gcode += m_writer.travel_to_pose(start, "move in the layer");
             } else if (! entered || (here - start.tip).norm() > EPSILON) {
                 gcode += this->retract();
-                if (axis.z() > 1. - EPSILON && patch.layer_normal.z() > EPSILON) {
+                if (staged && rotary && ! path->entry_travel.points.empty()) {
+                    for (size_t j = 0; j < path->entry_travel.points.size(); ++j)
+                        gcode += m_writer.travel_to_pose({ to_writer(path->entry_travel.points[j]),
+                                                           Vec3d(path->entry_tool_axis[j].cast<double>().normalized()) },
+                                                         "move over the level");
+                    gcode += m_writer.travel_to_pose(start, "lower onto the level");
+                    gcode += m_writer.end_inverse_time();
+                    m_staged_started = true;
+                } else if (! entered && staged && rotary) {
+                    gcode += this->staged_travel(start);
+                } else if (axis.z() > 1. - EPSILON && patch.layer_normal.z() > EPSILON) {
                     const Vec3d &n     = patch.layer_normal;
                     const double level = n.dot(start.tip);
                     auto over = [&](const Vec3d &p) { return (level - n.x() * p.x() - n.y() * p.y()) / n.z() + hop; };
@@ -9200,11 +9221,15 @@ std::string GCode::extrude_multiplanar_chunk(const Nonplanar::ConformalPatch &pa
             for (const ConformalPoint &p : m_conformal_points) {
                 ceiling = std::max(ceiling, axis.dot(p.pose.tip));
                 top     = std::max(top, p.pose.tip.z());
+                if (patch.staged_piece >= 0)
+                    m_staged_reach = std::max(m_staged_reach, (p.pose.tip - plate).norm());
             }
             this->set_last_pos(path->first_point());
             m_need_change_layer_lift_z = false;
             m_conformal_open_end = patch.free_travel;
+            m_staged_emit        = staged;
             gcode += this->_extrude(*path, "multiplanar chunk");
+            m_staged_emit        = false;
             m_conformal_open_end = false;
             const ExtrusionPathConformal *next = i + 1 < paths.size() ? paths[i + 1] : nullptr;
             const bool flows_on = patch.free_travel && next != nullptr &&
@@ -9212,15 +9237,15 @@ std::string GCode::extrude_multiplanar_chunk(const Nonplanar::ConformalPatch &pa
             static const double keep_primed = [] { const char *v = research_switch("NP_NATIVE_KEEP_PRIMED"); return v != nullptr ? std::max(0., std::atof(v)) : 3.; }();
             const bool keep_short = keep_primed > 0. && next != nullptr &&
                                     (to_writer(next->polyline.points.front()) - m_writer.get_position()).norm() < keep_primed;
-            reach = flows_on ? Reach::Primed :
+            reach = staged ? Reach::Lift : flows_on ? Reach::Primed :
                     ! in_layer(m_writer.get_position(), next) ? Reach::Lift :
                     (outer(*path) || outer(*next)) && ! keep_short ? Reach::Retracted : Reach::Primed;
-            if (reach != Reach::Primed)
+            if (reach != Reach::Primed && ! staged)
                 gcode += this->wipe_conformal_path();
             gcode += m_writer.end_inverse_time();
             m_conformal_points.clear();
         }
-        if (rotary && k + 1 == patch.shell_paths.size())
+        if (rotary && k + 1 == patch.shell_paths.size() && (patch.staged_piece < 0 || patch.staged_last))
             gcode += this->rotary_move_safely(nullptr);
         gcode += ";_NONPLANAR_END\n";
     }
@@ -9228,6 +9253,52 @@ std::string GCode::extrude_multiplanar_chunk(const Nonplanar::ConformalPatch &pa
         gcode += this->retract();
         gcode += m_writer.travel_to_z(std::max(m_writer.get_position().z(), top + hop), "lift off the chunk", true, this->conformal_max_speed_z());
     }
+    gcode += m_writer.end_inverse_time();
+    return gcode;
+}
+
+std::string GCode::staged_travel(const ToolPose &target)
+{
+    if (! m_staged_started) {
+        m_staged_started = true;
+        return this->rotary_move_safely(&target);
+    }
+    std::string  gcode;
+    const Vec2d  plate = BoundingBoxf(m_config.printable_area.values).center();
+    const Vec3d  origin(plate.x(), plate.y(), 0.);
+    const double hop   = std::max(this->nonplanar_head().margin,
+                                  m_writer.filament() != nullptr ? m_config.z_hop.get_at(m_writer.filament()->id()) : 0.);
+    const double clear = std::max({ m_staged_reach, (target.tip - origin).norm() }) + std::max(hop, 3.);
+    auto outward = [&](const Vec3d &p, const Vec3d &a) {
+        const Vec3d  d = p - origin;
+        const double b = a.dot(d), c = d.squaredNorm() - clear * clear;
+        return p + std::max(hop, -b + std::sqrt(std::max(0., b * b - c))) * a;
+    };
+    auto slerp = [](const Vec3d &a, const Vec3d &b, double t) {
+        const double angle = std::acos(std::clamp(a.dot(b), -1., 1.));
+        if (angle < 1e-9)
+            return a;
+        if (std::abs(std::sin(angle)) < 1e-6) {
+            const Vec3d side = std::abs(a.z()) < 0.9 ? Vec3d(Vec3d::UnitZ() - a.z() * a).normalized() : a.unitOrthogonal();
+            return Vec3d(std::cos(M_PI * t) * a + std::sin(M_PI * t) * side);
+        }
+        return Vec3d((std::sin((1. - t) * angle) * a + std::sin(t * angle) * b) / std::sin(angle));
+    };
+    const Vec3d here_axis = m_writer.get_tool_axis().normalized();
+    const Vec3d from      = outward(m_writer.get_position(), here_axis);
+    const Vec3d to        = outward(target.tip, target.axis);
+    gcode += m_writer.travel_to_pose({ from, here_axis }, "lift along the tool clear of the printed parts");
+    const Vec3d  u0 = (from - origin).normalized(), u1 = (to - origin).normalized();
+    const double r0 = (from - origin).norm(), r1 = (to - origin).norm();
+    const double turn = std::max(std::acos(std::clamp(u0.dot(u1), -1., 1.)), std::acos(std::clamp(here_axis.dot(target.axis), -1., 1.)));
+    const int    steps = std::max(1, int(std::ceil(turn / Geometry::deg2rad(4.))));
+    for (int i = 1; i < steps; ++i) {
+        const double t = double(i) / steps;
+        gcode += m_writer.travel_to_pose({ origin + ((1. - t) * r0 + t * r1) * slerp(u0, u1, t), slerp(here_axis, target.axis, t).normalized() },
+                                         "turn over the printed parts");
+    }
+    gcode += m_writer.travel_to_pose({ to, target.axis }, "turn over the printed parts");
+    gcode += m_writer.travel_to_pose(target, "lower along the tool");
     gcode += m_writer.end_inverse_time();
     return gcode;
 }
@@ -9601,7 +9672,7 @@ void GCode::emit_conformal_moves(std::string &gcode, const ExtrusionPathConforma
                 m_layer != nullptr && m_layer->object() != nullptr ? m_layer->object()->id().id : 0);
 
     const bool road_cooling = m_config.nonplanar_road_cooling.value && m_writer.filament() != nullptr;
-    if (road_cooling) {
+    if (road_cooling && !m_staged_emit) {
         if (path.role() == erTopSolidInfill && NOZZLE_CONFIG(top_surface_speed) > 0.)
             speed = std::min(speed, double(NOZZLE_CONFIG(top_surface_speed)));
         if (path.role() != erIroning && unscale<double>(path.polyline.length()) < SmallRoadLength) {
@@ -9613,7 +9684,7 @@ void GCode::emit_conformal_moves(std::string &gcode, const ExtrusionPathConforma
         }
     }
 
-    if (is_perimeter(path.role()) && !is_bridge(path.role()) && path.polyline.points.front() == path.polyline.points.back() &&
+    if (!m_staged_emit && is_perimeter(path.role()) && !is_bridge(path.role()) && path.polyline.points.front() == path.polyline.points.back() &&
         path.polyline.length() <= SMALL_PERIMETER_LENGTH(NOZZLE_CONFIG(small_perimeter_threshold)))
         speed = NOZZLE_CONFIG(small_perimeter_speed).value == 0 ? 0.5 * NOZZLE_CONFIG(outer_wall_speed) :
                                                                   NOZZLE_CONFIG(small_perimeter_speed).get_abs_value(NOZZLE_CONFIG(outer_wall_speed));
@@ -9747,6 +9818,10 @@ void GCode::emit_conformal_moves(std::string &gcode, const ExtrusionPathConforma
     params.condition.target_length = std::max(0.15, params.nominal_speed / params.limits.segment_rate);
     if (Nonplanar::full_orientation(m_config) && path.role() != erExternalPerimeter && path.role() != erOverhangPerimeter)
         params.limits.segment_rate = 0.;
+    if (m_staged_emit) {
+        params.limits.segment_rate = 0.;
+        params.bead_tags           = true;
+    }
     if (path.preserve_points) {
         params.condition.target_length = 0.;
         params.preserve_points = true;
@@ -9968,8 +10043,9 @@ bool GCode::conformal_lift_enforced(ExtrusionRole role) const
 
 bool GCode::conformal_keep_primed(ExtrusionRole from, const ExtrusionPathConformal *next, const ExtrusionPathConformal *prev)
 {
+    // Rotary printers retract and lift for every travel; a primed glide drags the tip over the roads it crosses.
     if (next == nullptr || !m_material_columns || m_writer.filament() == nullptr || next->polyline.points.size() < 2 ||
-        !next->tool_axis.empty())
+        !next->tool_axis.empty() || (m_config.nonplanar_kinematics.value != RotaryLayout::None && m_config.nonplanar_mode.value != NonplanarMode::Staged))
         return false;
     const bool in_band = this->conformal_in_band(prev, next);
     const bool skipped_shell = in_band && next->shell > prev->shell + 1 && !m_conformal_next_hold;
@@ -10235,6 +10311,9 @@ std::string GCode::wipe_conformal_path()
         scale = std::min(scale, 1.);
     const double length = m_config.use_firmware_retraction ? 0. : scale * filament.retraction_length();
     m_conformal_retract = length;
+    // Rotary printers honour the filament's wipe setting: with wipe off the retract happens in place (conformal_retract), not on the move.
+    if (!wipe && m_config.nonplanar_kinematics.value != RotaryLayout::None && m_config.nonplanar_mode.value != NonplanarMode::Staged)
+        return gcode;
     const double    before   = wipe ? length * filament.retract_before_wipe() : 0.;
     const double    after    = wipe ? length * filament.retract_after_wipe() : 0.;
     Nonplanar::ConformalWipeParams params;
@@ -11057,7 +11136,10 @@ std::string GCode::_extrude(const ExtrusionPath &path, const std::string &path_d
     Extruder *filament = m_writer.filament();
     if (const auto *conformal = dynamic_cast<const ExtrusionPathConformal *>(&path);
         conformal != nullptr && !conformal->preserve_points && filament != nullptr && !m_config.use_firmware_retraction &&
-        m_config.gcode_flavor.value != gcfMakerWare) {
+        m_config.gcode_flavor.value != gcfMakerWare &&
+        // rotary printers prime in place: a prime spread over the first tilted moves overfeeds a road the table is still turning under
+        // (Staged regions keep their own validated prime and travel handling)
+        (m_config.nonplanar_kinematics.value == RotaryLayout::None || m_config.nonplanar_mode.value == NonplanarMode::Staged)) {
         gcode += m_writer.unlift();
         m_conformal_prime = filament->take_retraction();
     } else
@@ -11215,6 +11297,8 @@ std::string GCode::_extrude(const ExtrusionPath &path, const std::string &path_d
             throw Slic3r::InvalidArgument("Invalid speed");
         }
     }
+    if (m_staged_emit)
+        speed = NOZZLE_CONFIG(outer_wall_speed);
     double filament_max_volumetric_speed = FILAMENT_CONFIG(filament_max_volumetric_speed);
     if (FILAMENT_CONFIG(filament_adaptive_volumetric_speed)){
         double fitted_value = calc_max_volumetric_speed(path.height, path.width, FILAMENT_CONFIG(volumetric_speed_coefficients));
@@ -12510,11 +12594,21 @@ std::string GCode::retract(bool toolchange, bool is_last_retraction, LiftType li
         can_lift = false;
     }
 
-    if (needs_lift && can_lift && this->rotary_at_home()) {
+    // The z-hop lifts along the part's Z, away from the material below the tool: safe at any turntable angle and modest tilt.
+    // Off home, rotary printers lift at once, since pose travels between turned roads do not apply a pending lift.
+    // Staged regions keep their validated home-only lazy lift.
+    const bool rotary_printer = m_config.nonplanar_kinematics.value != RotaryLayout::None && m_config.nonplanar_mode.value != NonplanarMode::Staged;
+    if (needs_lift && can_lift && !this->rotary_at_home() && rotary_printer && m_writer.get_tool_axis().z() > 0.7) {
+        // Turned table: lift the tool pose itself; the writer's Z-only moves work in the untransformed frame.
+        const double hop = m_config.z_hop.get_at(m_writer.filament()->id());
+        if (hop > 0.)
+            gcode += m_writer.travel_to_pose({ m_writer.get_position() + Vec3d(0., 0., hop), m_writer.get_tool_axis() }, "lift Z");
+    } else if (needs_lift && can_lift && this->rotary_at_home()) {
         if (m_writer.get_position().z() < m_nominal_z - EPSILON && Nonplanar::requests_conformal_shells(*m_print))
             gcode += m_writer.travel_to_z(m_nominal_z, "rise to layer Z before lift", true, this->conformal_max_speed_z());
         if (this->below_conformal_material())
             lift_type = LiftType::NormalLift;
+        m_writer.set_pose_travel_lifts(rotary_printer);
         if (apply_instantly)
             gcode += m_writer.eager_lift(lift_type);
         else

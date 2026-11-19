@@ -62,6 +62,7 @@ public:
 
     virtual bool firmware_rtcp() const = 0;
     virtual bool inverse_time_feed() const = 0;
+    virtual bool combined_feed() const { return false; }
 };
 
 class ThreeAxisKinematics : public ToolKinematics
@@ -95,6 +96,7 @@ struct RotaryGeometry
     double               singularity_axis_error_deg = 0.9;
     bool                 firmware_rtcp = false;
     bool                 inverse_time_feed = false;
+    bool                 combined_feed = false;
 };
 
 class RotaryKinematics : public ToolKinematics
@@ -110,6 +112,7 @@ public:
     double                           max_tilt(double phi) const override;
     bool                             firmware_rtcp() const override { return m_geo.firmware_rtcp; }
     bool                             inverse_time_feed() const override { return m_geo.inverse_time_feed; }
+    bool                             combined_feed() const override { return m_geo.combined_feed; }
 
     std::array<double, 2> kinematic_angles(const JointPose &joints) const;
     double                machine_angle(int axis, double kinematic_rad) const;

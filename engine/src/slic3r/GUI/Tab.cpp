@@ -5022,6 +5022,7 @@ void TabPrinter::build_fff()
         append_indexed_line("rotary_axis_reversed", { L("First"), L("Second") });
         optgroup->append_single_option_line("rotary_tool_length");
         optgroup->append_single_option_line("rotary_table_height");
+        optgroup->append_single_option_line("rotary_plate_overhang");
         optgroup->append_single_option_line("rotary_firmware_rtcp");
         optgroup->append_single_option_line("rotary_inverse_time_feed");
 
@@ -5952,7 +5953,7 @@ void TabPrinter::toggle_options()
     if (m_active_page->title() == L("Non-planar")) {
         const bool rotary = m_config->option<ConfigOptionEnum<RotaryLayout>>("nonplanar_kinematics")->value != RotaryLayout::None;
         for (auto el : {"nonplanar_max_tilt", "rotary_tool_length", "rotary_firmware_rtcp", "rotary_inverse_time_feed",
-                        "rotary_table_height"})
+                        "rotary_table_height", "rotary_plate_overhang"})
             toggle_line(el, rotary);
         for (auto el : {"rotary_axis_limits", "rotary_axis_continuous", "rotary_max_speed", "rotary_pivot",
                         "rotary_axis_reversed", "rotary_axis_home", "rotary_linear_moves_table", "rotary_tool_mount"})

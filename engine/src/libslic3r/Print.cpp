@@ -174,7 +174,7 @@ const std::unordered_set<std::string> &Print::gcode_only_options()
         "gcode_remap_y",
         "gcode_remap_z",
         "rotary_max_speed",
-        "rotary_firmware_rtcp", "rotary_inverse_time_feed", "nonplanar_collision_check", "nonplanar_repair_iterations", "nonplanar_road_cooling", "nonplanar_segment_rate", "rotary_linear_moves_table",
+        "rotary_firmware_rtcp", "rotary_inverse_time_feed", "rotary_axis_letters", "rotary_feed_mode", "nonplanar_collision_check", "nonplanar_repair_iterations", "nonplanar_road_cooling", "nonplanar_segment_rate", "rotary_linear_moves_table", "rotary_plate_overhang",
         "belt_frame_tilt_decouple", "belt_frame_tilt_angle",
         "belt_printer_infinite_y",
         "additional_cooling_fan_speed",

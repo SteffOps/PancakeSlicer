@@ -61,6 +61,7 @@ struct ReportObject
     std::pair<double, double> curved_band { 0., 0. };
     double curved_cone_tolerance = 0.05;
     std::string layer_source, layer_source_refused;
+    std::string staged;
     size_t      top_patches   = 0;
     size_t      other_patches = 0;
     size_t      bands         = 0;

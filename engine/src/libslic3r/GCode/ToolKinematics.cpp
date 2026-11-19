@@ -8,6 +8,7 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <string>
 
 namespace Slic3r {
 
@@ -359,6 +360,8 @@ RotaryGeometry rotary_geometry(const PrintConfig &config)
     case HybridAC: letters = "AC"; break;
     default: break;
     }
+    if (const std::string &custom = config.rotary_axis_letters.value; custom.size() == 2)
+        letters = custom.c_str();
     auto at = [](const auto &opt, size_t i, auto fallback) { return i < opt.values.size() ? opt.values[i] : fallback; };
     for (size_t i = 0; i < 2; ++i) {
         RotaryAxis &axis     = geo.axes[i];
@@ -378,8 +381,10 @@ RotaryGeometry rotary_geometry(const PrintConfig &config)
     geo.tool_length       = config.rotary_tool_length.value;
     geo.table_height      = config.rotary_table_height.value;
     geo.max_tilt          = Geometry::deg2rad(config.nonplanar_max_tilt.value);
-    geo.firmware_rtcp     = config.rotary_firmware_rtcp.value;
-    geo.inverse_time_feed = config.rotary_inverse_time_feed.value;
+    const RotaryFeedMode feed = config.rotary_feed_mode.value;
+    geo.firmware_rtcp     = config.rotary_firmware_rtcp.value || feed == RotaryFeedMode::RTCP;
+    geo.inverse_time_feed = config.rotary_inverse_time_feed.value || feed == RotaryFeedMode::InverseTime;
+    geo.combined_feed     = feed == RotaryFeedMode::RRFCombined && !geo.inverse_time_feed && !geo.firmware_rtcp;
     return geo;
 }
 

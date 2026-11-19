@@ -28,6 +28,7 @@
 #include "Nonplanar/NativePrint.hpp"
 #include "Nonplanar/AutoMode.hpp"
 #include "GCode/ClearanceRepair.hpp"
+#include "Nonplanar/Staged.hpp"
 #include "Nonplanar/CurvedTopsAccess.hpp"
 #include "Nonplanar/CurvedTopsSchedule.hpp"
 #include "Nonplanar/OneShotField.hpp"
@@ -796,6 +797,18 @@ void PrintObject::nonplanar_shells()
 {
     if (!this->set_started(posNonplanar))
         return;
+    if (Nonplanar::staged_requested(*this)) {
+        m_print->set_status(40, L("Slicing staged regions"));
+        for (Layer *layer : m_layers) {
+            layer->conformal_patches_before.clear();
+            layer->conformal_patches_after.clear();
+        }
+        m_conformal = std::make_unique<Nonplanar::ConformalResult>();
+        m_conformal->staged_report = Nonplanar::build_staged(*this, *m_conformal);
+        m_print->throw_if_canceled();
+        this->set_done(posNonplanar);
+        return;
+    }
     if (curved_tops_mode(m_config.nonplanar_mode.value))
         this->project_nonplanar_surfaces();
     const bool imported = !m_config.nonplanar_atom_toolpath.value.empty();

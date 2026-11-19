@@ -254,6 +254,7 @@ enum class ImexVizTheme {
 };
 
 enum class RotaryLayout : unsigned char { None, TableBC, TableAC, HeadAB, HeadBC };
+enum class RotaryFeedMode : unsigned char { XYZ, InverseTime, RTCP, RRFCombined };
 enum class NonplanarTopPattern : unsigned char { Contour, Rectilinear, Concentric };
 enum class NonplanarTopOrder : unsigned char { Continuous, Monotonic, Follow };
 enum class NonplanarFallback : unsigned char { ZAA, Planar, None };
@@ -261,9 +262,11 @@ enum class TopTexture : unsigned char { None, Ribs, Knurl };
 enum class NonplanarCollisionCheck : unsigned char { Off, Warn, Block };
 enum class NonplanarWave : unsigned char { Off, Top, Whole, Infill };
 enum class NonplanarWavePattern : unsigned char { Waves, Ripple, Crosshatch };
-enum class NonplanarMode : unsigned char { Off, Auto, Manual, Multiplanar, Field, OneShot, CurvedTops, SmoothMorph, NonplanarTop, Slant, ConformalLayers };
+enum class NonplanarMode : unsigned char { Off, Auto, Manual, Multiplanar, Field, OneShot, CurvedTops, SmoothMorph, NonplanarTop, Slant, ConformalLayers, Staged };
 inline bool curved_tops_mode(NonplanarMode mode) { return mode == NonplanarMode::NonplanarTop; }
 enum class NonplanarRegionSource : unsigned char { Auto, PaintOnly };
+enum class StagedLayerStyle : unsigned char { Flat, Hinge, GrowCone };
+enum class StagedTool : unsigned char { Follow, FixedTilt };
 enum class NonplanarDeform : unsigned char { Off, Auto, On, QuickCurve, Conical, Optimized };
 
 enum class SurfaceFillOrder {
@@ -757,6 +760,7 @@ CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(SurfaceFillOrder)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(TpmsAdaptiveMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(TpmsAdaptiveGradient)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(RotaryLayout)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(RotaryFeedMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(NonplanarTopPattern)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(NonplanarTopOrder)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(NonplanarFallback)
@@ -767,6 +771,8 @@ CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(NonplanarWave)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(NonplanarWavePattern)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(NonplanarRegionSource)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(NonplanarDeform)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(StagedLayerStyle)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(StagedTool)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(WaveOverhangSpacingMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(WaveOverhangSeamMode)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(WaveOverhangPattern)
@@ -1553,6 +1559,17 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionBool,                      nonplanar_bridges))
     ((ConfigOptionEnum<NonplanarFallback>,   nonplanar_fallback))
     ((ConfigOptionFloat,                     nonplanar_full_conformal_max_thickness))
+    ((ConfigOptionInt,                       staged_stage))
+    ((ConfigOptionEnum<StagedLayerStyle>,    staged_layer_style))
+    ((ConfigOptionPoint3,                    staged_axis_point))
+    ((ConfigOptionPoint3,                    staged_axis_dir))
+    ((ConfigOptionPoint3,                    staged_hinge_start))
+    ((ConfigOptionFloat,                     staged_hinge_angle))
+    ((ConfigOptionFloat,                     staged_cone_half_angle))
+    ((ConfigOptionFloat,                     staged_cone_radius))
+    ((ConfigOptionEnum<StagedTool>,          staged_tool))
+    ((ConfigOptionFloat,                     staged_tool_tilt))
+    ((ConfigOptionInt,                       staged_copies))
     )
 
 bool nonplanar_top_monotonic(const PrintRegionConfig &config);
@@ -1852,11 +1869,14 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionFloat,                    rotary_tool_length))
     ((ConfigOptionFloats,                   rotary_tool_mount))
     ((ConfigOptionFloat,                    rotary_table_height))
+    ((ConfigOptionBool,                     rotary_plate_overhang))
     ((ConfigOptionBools,                    rotary_linear_moves_table))
     ((ConfigOptionFloats,                   rotary_axis_home))
     ((ConfigOptionBools,                    rotary_axis_reversed))
     ((ConfigOptionBool,                     rotary_firmware_rtcp))
     ((ConfigOptionBool,                     rotary_inverse_time_feed))
+    ((ConfigOptionString,                   rotary_axis_letters))
+    ((ConfigOptionEnum<RotaryFeedMode>,     rotary_feed_mode))
     ((ConfigOptionFloat,                    nonplanar_max_tilt))
     ((ConfigOptionEnum<NonplanarCollisionCheck>, nonplanar_collision_check))
     ((ConfigOptionInt,                            nonplanar_repair_iterations))

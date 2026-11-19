@@ -242,6 +242,8 @@ set(lisbslic3r_sources
     Nonplanar/MultiplanarConfirm.cpp
     Nonplanar/MultiplanarConfirm.hpp
     Nonplanar/Multiplanar.hpp
+    Nonplanar/Staged.cpp
+    Nonplanar/Staged.hpp
     Nonplanar/Slant.cpp
     Nonplanar/Slant.hpp
     Nonplanar/SlantChoice.hpp

@@ -157,11 +157,14 @@ public:
     void set_first_layer_point_test(FirstLayerPointTest test) { m_first_layer_point_test = std::move(test); }
 
     void set_force_normal_lift(bool force) { m_force_normal_lift = force; }
+    // A pending lazy lift is applied before the next pose travel too (rotary printers, whose roads link by pose travels).
+    void set_pose_travel_lifts(bool lifts) { m_pose_travel_lifts = lifts; }
 
     static bool supports_separate_travel_acceleration(GCodeFlavor flavor);
 
     void                  set_tool_kinematics(std::unique_ptr<ToolKinematics> kinematics);
     void                  set_min_joint_move_time(double seconds) { m_min_joint_move_time = seconds; }
+    void                  set_line_tag(const std::string &tag) { m_line_tag = tag; }
     const ToolKinematics &tool_kinematics() const;
     void        extrude_to_pose(std::string &out, const ToolPose &pose, double dE, const std::string &comment = {});
     std::string travel_to_pose(const ToolPose &pose, const std::string &comment = {}, double speed = 0.);
@@ -194,6 +197,7 @@ protected:
 
     FirstLayerPointTest    m_first_layer_point_test;
     bool                   m_force_normal_lift = false;
+    bool                   m_pose_travel_lifts = false;
 
     std::unique_ptr<MachineKinematics> m_kinematics;
 
@@ -209,6 +213,7 @@ protected:
     double                          m_z_travel_cap { 0. };
     bool                            m_limit_next_travel_z { false };
     double                          m_min_joint_move_time = 0.;
+    std::string                     m_line_tag;
     void        write_joint_move(std::string &out, const JointPose &joints, double tip_length, double tip_speed,
                                  double dE, const std::string &comment);
     void        pose_move(std::string &out, const ToolPose &pose, double dE, const std::string &comment, bool travel, double speed = 0.);

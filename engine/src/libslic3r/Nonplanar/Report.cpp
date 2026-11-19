@@ -232,6 +232,7 @@ NonplanarReport make_report(const Print &print, const GCodeProcessorResult &resu
         }
         out.layer_source         = conformal.layer_source;
         out.layer_source_refused = conformal.layer_source_refused;
+        out.staged               = conformal.staged_report;
         if (const OneShotState *oneshot = object->oneshot_state(); oneshot != nullptr) {
             out.oneshot          = oneshot->decision;
             out.oneshot_student  = oneshot->student;
@@ -483,6 +484,8 @@ std::string NonplanarReport::to_json(const std::map<size_t, std::string> &orient
             jo["curved_layers"] = json{ { "source", o.layer_source == "on" ? "column" : o.layer_source }, { "bands", o.other_patches } };
         else if (!o.layer_source_refused.empty())
             jo["curved_layers"] = json{ { "refused", o.layer_source_refused } };
+        if (!o.staged.empty())
+            jo["staged"] = o.staged;
         jo["regions"]   = o.regions;
         jo["patches"]   = std::move(patches_json);
         jo["fallbacks"] = std::move(fallbacks_json);

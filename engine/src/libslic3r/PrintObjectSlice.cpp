@@ -28,6 +28,7 @@
 #include "Layer.hpp"
 #include "Model.hpp"
 #include "GCode/ClearanceRepair.hpp"
+#include "Nonplanar/Staged.hpp"
 #include "Nonplanar/HeadEnvelope.hpp"
 #include "Nonplanar/NativePrint.hpp"
 #include "Nonplanar/Wave.hpp"
@@ -1046,8 +1047,9 @@ PrintObject::find_nonplanar_surfaces()
         BOOST_LOG_TRIVIAL(debug) << "Find nonplanar surfaces - disabled";
         return;
     }
-    if (m_print->config().nonplanar_kinematics.value != RotaryLayout::None || m_print->config().belt_printer.value)
-        throw Slic3r::SlicingError("Curved tops (3-axis) requires a fixed print head and a horizontal bed.");
+    // A rotary printer prints curved tops with its table at home; the tool kinematics still map every move.
+    if (m_print->config().belt_printer.value)
+        throw Slic3r::SlicingError("Curved tops (3-axis) requires a horizontal bed.");
     for (size_t region_id = 0; region_id < this->num_printing_regions(); ++ region_id)
         if (this->printing_region(region_id).config().zaa_enabled.value)
             throw Slic3r::SlicingError(_u8L("Nonplanar layers and Z contouring cannot be used together. "
@@ -1569,6 +1571,19 @@ void PrintObject::slice_volumes()
     }
     region_slices.clear();
     m_multiplanar = Nonplanar::clip_multiplanar_slices(*this);
+    const bool staged = Nonplanar::staged_requested(*this);
+    if (staged && !m_layers.empty()) {
+        const size_t kept = std::min<size_t>(2, m_layers.size());
+        for (size_t layer_id = kept; layer_id < m_layers.size(); ++layer_id)
+            delete m_layers[layer_id];
+        m_layers.resize(kept);
+        m_layers.back()->upper_layer = nullptr;
+        for (Layer *layer : m_layers) {
+            for (LayerRegion *region : layer->regions())
+                region->slices.set(ExPolygons(), stInternal);
+            layer->conformal_covered = true;
+        }
+    }
     m_planar_floating_mm = m_field_floating_mm = -1.;
     if (m_config.nonplanar_mode.value == NonplanarMode::Field && m_config.nonplanar_atom_toolpath.value.empty() && !m_layers.empty()) {
         m_auto_support_need = this->is_support_necessary();
@@ -1604,7 +1619,7 @@ void PrintObject::slice_volumes()
 
     BOOST_LOG_TRIVIAL(debug) << "Slicing volumes - removing top empty layers";
     const bool grounded = m_multiplanar != nullptr && !Nonplanar::grounded_route_slices(*this).empty();
-    while (! m_layers.empty() && ! grounded) {
+    while (! m_layers.empty() && ! grounded && ! staged) {
         const Layer *layer = m_layers.back();
         if (! layer->empty())
             break;

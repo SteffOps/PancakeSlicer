@@ -1377,6 +1377,11 @@ void GCodeWriter::extrude_to_pose(std::string &out, const ToolPose &pose, double
 std::string GCodeWriter::travel_to_pose(const ToolPose &pose, const std::string &comment, double speed)
 {
     std::string out;
+    if (m_pose_travel_lifts && m_to_lift > EPSILON) {
+        const double lift = m_to_lift;
+        m_to_lift = 0.;
+        this->pose_move(out, { this->get_position() + Vec3d(0., 0., lift), m_tool_axis }, 0., "lift Z", true, 0.);
+    }
     this->pose_move(out, pose, 0., comment, true, speed);
     return out;
 }
@@ -1526,10 +1531,15 @@ void GCodeWriter::write_joint_move(std::string &out, const JointPose &joints, do
         F = 60. / std::max(t, 1e-4);
     else if (kin.firmware_rtcp() && tip_length > EPSILON)
         F = 60. * tip_length / t;
+    else if (kin.combined_feed())
+        F = 60. * std::sqrt(dq.squaredNorm() + rotary_travel) / t;
     else
         F = 60. * (dq.norm() > EPSILON ? dq.norm() : std::sqrt(rotary_travel)) / t;
     w.emit_f(F);
-    w.emit_comment(GCodeWriter::full_gcode_comment, comment);
+    if (! m_line_tag.empty() && dE > 0.)
+        w.emit_comment(true, m_line_tag);
+    else
+        w.emit_comment(GCodeWriter::full_gcode_comment, comment);
     w.append_to(out);
     if (planned_moves != nullptr)
         planned_moves->push_back({ printed_to.xyz.x(), printed_to.xyz.y(), printed_to.xyz.z(), printed_to.rot[0], printed_to.rot[1],

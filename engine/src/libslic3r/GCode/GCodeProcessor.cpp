@@ -4805,7 +4805,10 @@ void GCodeProcessor::process_G1(const std::array<std::optional<double>, 4>& axes
     };
 
     float distance = move_length(time_delta);
-    if (m_tool_kinematics && m_joint_delta.xyz.norm() < EPSILON &&
+    if (m_tool_kinematics && m_tool_kinematics->combined_feed() &&
+        (m_joint_delta.rot[0] != 0. || m_joint_delta.rot[1] != 0.))
+        distance = float(std::sqrt(m_joint_delta.xyz.squaredNorm() + sqr(m_joint_delta.rot[0]) + sqr(m_joint_delta.rot[1])));
+    else if (m_tool_kinematics && m_joint_delta.xyz.norm() < EPSILON &&
         (m_joint_delta.rot[0] != 0. || m_joint_delta.rot[1] != 0.))
         distance = float(std::hypot(m_joint_delta.rot[0], m_joint_delta.rot[1]));
     assert(distance != 0.0f);
