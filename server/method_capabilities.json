@@ -44,6 +44,7 @@
       "id": "nonplanar_top",
       "target": "mode",
       "hardware": "known",
+      "rotaryDisabled": "Curved tops are not available on tilt-table printers: the heater block touches taller printed walls next to curved tops. Use Smooth morph or Auto for smooth tops.",
       "readiness": "curved_tops",
       "settingPrefixes": [
         "nonplanar_curved_"
