@@ -42,21 +42,24 @@ func stripExtendedMoves(src, dst string) error {
 	}
 	defer os.Remove(tmp.Name())
 	w := bufio.NewWriterSize(tmp, 1<<20)
-	if flags&1 == 0 || moveStride != extMoveStride {
+	if flags&1 == 0 || moveStride < extMoveStride {
 		if _, err := w.Write(head); err == nil {
 			_, err = io.Copy(w, r)
 		}
 	} else {
-		le.PutUint32(head[12:], plainMoveStride)
+		le.PutUint32(head[12:], moveStride-(extMoveStride-plainMoveStride))
 		le.PutUint32(head[28:], flags&^1)
 		err = writeAll(w, head)
 		if err == nil {
 			_, err = io.CopyN(w, r, int64(headerSize-movesHeaderMin)+int64(states)*int64(stateStride))
 		}
-		move := make([]byte, extMoveStride)
+		move := make([]byte, moveStride)
 		for i := uint64(0); err == nil && i < moves; i++ {
 			if _, err = io.ReadFull(r, move); err == nil {
 				err = writeAll(w, move[:plainMoveStride])
+			}
+			if err == nil && moveStride > extMoveStride {
+				err = writeAll(w, move[extMoveStride:])
 			}
 		}
 		if err == nil {
