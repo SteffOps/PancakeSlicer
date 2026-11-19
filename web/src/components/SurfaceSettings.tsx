@@ -14,6 +14,7 @@ import './process-settings.css';
 
 const shortReason = (m: MethodAvailability) => m.recovery === 'update_engine' ? (toolArtifactManifest ? 'Not in this engine build' : 'Engine still starting')
   : m.recovery === 'repair_printer' ? 'Printer axes unknown'
+  : /tilt-table/.test(m.reason ?? '') ? 'Not on tilt-table printers'
   : /rotary/i.test(m.reason ?? '') ? 'Needs rotary axes'
   : /Auto/.test(m.reason ?? '') ? 'Experimental on this printer' : 'Not available';
 const openMethodChoice = (key: string) => {

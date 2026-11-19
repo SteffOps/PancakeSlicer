@@ -47,6 +47,7 @@ export function deriveMethodAvailability(context: MethodContext): MethodAvailabi
       if (disabled) reason = disabled;
       else if (!known) { reason = 'Check your printer\'s axes, kinematics, and nozzle settings before using this slicing method.'; recovery = 'repair_printer'; }
       else if (rule.hardware === 'rotary' && !rotary) reason = 'This slicing method requires a printer with rotary axes configured.';
+      else if (rotary && (rule as { rotaryDisabled?: string }).rotaryDisabled) reason = (rule as { rotaryDisabled?: string }).rotaryDisabled;
       else if (DEMO) {  }
       else if (rule.readiness && (!verified || artifact?.features?.[rule.readiness as 'curved_tops' | 'nonplanar_wave'] !== true
         || rule.target === 'wave' && !artifact?.wave_modes?.includes(rule.id))) { reason = 'This slicing method isn\'t available in the current engine build.'; recovery = 'update_engine'; }

@@ -24,6 +24,8 @@ type methodRules struct {
 		Hardware  string `json:"hardware"`
 		Readiness string `json:"readiness"`
 		Disabled  string `json:"disabled"`
+		// RotaryDisabled is the reason the method is unavailable on printers with rotary axes.
+		RotaryDisabled string `json:"rotaryDisabled"`
 	} `json:"methods"`
 }
 
@@ -109,6 +111,8 @@ func (s *Server) methodDecisions(printer map[string]any) []methodDecision {
 				d.Recovery = "repair_printer"
 			case rule.Hardware == "rotary" && !rotary:
 				d.Reason = "This method requires configured rotary axes."
+			case rule.RotaryDisabled != "" && rotary:
+				d.Reason = rule.RotaryDisabled
 			case rule.Readiness != "" && (!ready || !af[rule.Readiness] || rule.Target == "wave" && !slices.Contains(waveModes, rule.ID)):
 				d.Reason = "This method is not ready in the current engine bundle."
 				d.Recovery = "update_engine"
