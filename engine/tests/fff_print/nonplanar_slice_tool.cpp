@@ -3364,7 +3364,7 @@ int main(int argc, char **argv)
             result.clearance_report = verify_clearance(result, params, *make_tool_kinematics(full));
             const ClearanceReport &report = result.clearance_report;
             if (!args.moves_out.empty())
-                write_moves(args.moves_out, result, args.filaments, nlohmann::json::object(), args.moves_extended);
+                write_moves(args.moves_out, result, args.filaments, nlohmann::json::object(), args.moves_extended, make_tool_kinematics(full).get());
             std::cout << "clearance_hit_moves " << report.hit_moves
                       << "\nclearance_machine_hit_moves " << report.machine_hit_moves
                       << "\nclearance_tolerated_moves " << report.tolerated_moves
@@ -3756,7 +3756,7 @@ int main(int argc, char **argv)
             const auto statistics = print_statistics_json(print, result);
             if (!args.json.empty()) record["statistics"] = statistics;
             if (!args.moves_out.empty() && !args.moves_extended)
-                write_moves(args.moves_out, result, args.filaments, statistics, false);
+                write_moves(args.moves_out, result, args.filaments, statistics, false, make_tool_kinematics(print.config()).get());
         }
 
         if (args.explain)
@@ -3978,7 +3978,8 @@ int main(int argc, char **argv)
             result.clearance_report   = verify_clearance(result, params, *make_tool_kinematics(print.config()));
         }
         if (!args.moves_out.empty() && args.moves_extended)
-            write_moves(args.moves_out, result, args.filaments, print_statistics_json(print, result), true);
+            write_moves(args.moves_out, result, args.filaments, print_statistics_json(print, result), true,
+                        make_tool_kinematics(print.config()).get());
         if (!args.tip_out.empty()) {
             const auto       kinematics = make_tool_kinematics(print.config());
             const bool       rotary     = kinematics->rotary_count() > 0;

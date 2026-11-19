@@ -2,12 +2,15 @@
 #include "libslic3r/CustomGCode.hpp"
 #include "libslic3r/ExtrusionEntity.hpp"
 #include "libslic3r/GCode/GCodeProcessor.hpp"
+#include "libslic3r/GCode/ToolKinematics.hpp"
+#include "libslic3r/PrintConfig.hpp"
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/nowide/fstream.hpp>
 #include <boost/system/error_code.hpp>
 #include <nlohmann/json.hpp>
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cmath>
 #include <cstdint>
@@ -41,10 +44,17 @@ void move_float(std::ostream &out, float value)
 }
 
 void write_moves(const std::string &path, const GCodeProcessorResult &result, const std::vector<std::string> &filaments,
-                 const nlohmann::json &statistics, bool extended)
+                 const nlohmann::json &statistics, bool extended, const ToolKinematics *kinematics)
 {
     const char *road_ids_env = std::getenv("NP_NATIVE_ROAD_IDS");
     const bool road_ids = road_ids_env != nullptr && *road_ids_env != '\0' && std::string(road_ids_env) != "0";
+    // Rotary jobs carry each move's commanded rotary axis values in the A, B and C slots of the layout (degrees).
+    const RotaryLayout layout = kinematics != nullptr ? kinematics->layout() : RotaryLayout::None;
+    const bool oriented = layout != RotaryLayout::None && result.joints.size() == result.moves.size();
+    const std::array<int, 2> slot = layout == RotaryLayout::TableAC ? std::array<int, 2>{0, 2} :
+                                    layout == RotaryLayout::HeadAB  ? std::array<int, 2>{0, 1} : std::array<int, 2>{1, 2};
+    const uint32_t orientation_flags = !oriented ? 0u :
+        0x10000u | (layout_is_table(layout) ? 0x20000u | (layout == RotaryLayout::TableAC ? 0x40000u : 0u) : 0u);
     static_assert(uint8_t(EMoveType::Count) < 128, "Move type must leave bit 7 for internal_only");
     struct Layer { uint32_t id; uint64_t first; float z; float extrusion_z; };
     std::vector<Layer> layers;
@@ -86,7 +96,8 @@ void write_moves(const std::string &path, const GCodeProcessorResult &result, co
     try {
         boost::nowide::ofstream out(temporary.string(), std::ios::binary | std::ios::trunc);
         out.write("ORCAMV01", 8);
-        for (uint32_t value : {64u, 52u + (extended ? 8u : 0u) + (road_ids ? 4u : 0u), 32u, 16u, 1u, (extended ? 1u : 0u) | (road_ids ? 2u : 0u)}) move_le(out, value);
+        for (uint32_t value : {64u, 52u + (extended ? 8u : 0u) + (road_ids ? 4u : 0u) + (oriented ? 16u : 0u), 32u, 16u, 1u,
+                               (extended ? 1u : 0u) | (road_ids ? 2u : 0u) | orientation_flags}) move_le(out, value);
         move_le(out, uint64_t(result.moves.size()));
         move_le(out, uint32_t(result.move_states.size()));
         move_le(out, uint32_t(layers.size()));
@@ -120,6 +131,12 @@ void write_moves(const std::string &path, const GCodeProcessorResult &result, co
             }
             if (road_ids)
                 move_le(out, result.state(move).native_road_id);
+            if (oriented) {
+                float pose[3] = {0.f, 0.f, 0.f};
+                for (int i = 0; i < 2; ++i) pose[slot[i]] = float(result.joints[move_index].rot[i]);
+                for (float value : pose) move_float(out, value);
+                move_float(out, 0.f);
+            }
             ++move_index;
         }
         for (const Layer &layer : layers) {
