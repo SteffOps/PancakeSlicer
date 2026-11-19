@@ -1,6 +1,6 @@
 {
 	"name": "Custom Printer",
-	"version": "02.04.00.22",
+	"version": "02.04.00.23",
 	"force_update": "0",
 	"description": "My configurations",
 	"machine_model_list": [
@@ -31,6 +31,10 @@
 		{
 			"name": "Generic ToolChanger Printer",
 			"sub_path": "machine/MyToolChanger.json"
+		},
+		{
+			"name": "GoetheLab 5axisFDM",
+			"sub_path": "machine/GoetheLab 5axisFDM.json"
 		},
 		{
 			"name": "Hybrid XYA+C 5-axis",
@@ -219,6 +223,10 @@
 			"sub_path": "process/0.20mm Full orientation @FR3.json"
 		},
 		{
+			"name": "0.20mm Smoothest tops @GoetheLab",
+			"sub_path": "process/0.20mm Smoothest tops @GoetheLab.json"
+		},
+		{
 			"name": "0.20mm Smoothest tops @Hybrid",
 			"sub_path": "process/0.20mm Smoothest tops @Hybrid.json"
 		},
@@ -263,6 +271,10 @@
 		{
 			"name": "Generic PLA @FR3",
 			"sub_path": "filament/Generic PLA @FR3.json"
+		},
+		{
+			"name": "Generic PLA @GoetheLab",
+			"sub_path": "filament/Generic PLA @GoetheLab.json"
 		},
 		{
 			"name": "Generic PLA @Hybrid",
@@ -385,6 +397,10 @@
 		{
 			"name": "Fairino FR3 cell 0.4 nozzle",
 			"sub_path": "machine/Fairino FR3 cell 0.4 nozzle.json"
+		},
+		{
+			"name": "GoetheLab 5axisFDM 0.4 nozzle",
+			"sub_path": "machine/GoetheLab 5axisFDM 0.4 nozzle.json"
 		},
 		{
 			"name": "Hybrid XYA+C 5-axis 0.4 nozzle",

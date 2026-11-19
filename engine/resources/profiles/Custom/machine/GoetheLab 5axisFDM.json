@@ -1,0 +1,12 @@
+{
+	"type": "machine_model",
+	"name": "GoetheLab 5axisFDM",
+	"model_id": "goethelab_5axisfdm",
+	"nozzle_diameter": "0.4",
+	"machine_tech": "FFF",
+	"family": "MyPrinter",
+	"bed_model": "",
+	"bed_texture": "",
+	"hotend_model": "",
+	"default_materials": "Generic PLA @GoetheLab"
+}

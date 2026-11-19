@@ -1,0 +1,62 @@
+{
+	"type": "filament",
+	"name": "Generic PLA @GoetheLab",
+	"inherits": "Generic PLA @System",
+	"from": "system",
+	"setting_id": "GRcVIuDYUcRmGVZ3",
+	"instantiation": "true",
+	"filament_type": [
+		"PLA"
+	],
+	"filament_extruder_id": [
+		"1"
+	],
+	"filament_extruder_variant": [
+		"Direct Drive Standard"
+	],
+	"nozzle_temperature": [
+		"205"
+	],
+	"nozzle_temperature_initial_layer": [
+		"205"
+	],
+	"cool_plate_temp": [
+		"0"
+	],
+	"cool_plate_temp_initial_layer": [
+		"0"
+	],
+	"eng_plate_temp": [
+		"0"
+	],
+	"eng_plate_temp_initial_layer": [
+		"0"
+	],
+	"hot_plate_temp": [
+		"0"
+	],
+	"hot_plate_temp_initial_layer": [
+		"0"
+	],
+	"supertack_plate_temp": [
+		"0"
+	],
+	"supertack_plate_temp_initial_layer": [
+		"0"
+	],
+	"textured_plate_temp": [
+		"0"
+	],
+	"textured_plate_temp_initial_layer": [
+		"0"
+	],
+	"filament_diameter": [
+		"1.75"
+	],
+	"filament_max_volumetric_speed": [
+		"12"
+	],
+	"compatible_printers": [
+		"GoetheLab 5axisFDM 0.4 nozzle"
+	]
+}

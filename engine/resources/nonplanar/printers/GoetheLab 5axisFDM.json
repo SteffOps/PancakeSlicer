@@ -1,0 +1,204 @@
+{
+	"version": "2.4.0.0",
+	"type": "machine",
+	"name": "GoetheLab 5axisFDM",
+	"from": "User",
+	"inherits": "",
+	"instantiation": "true",
+	"printer_notes": "GoetheLab (FH Aachen) 5axisFDM: Prusa i3 MK3S head over a tilt-rotary table, RepRapFirmware, axes X Y Z U V. Kinematics from the lab's 5axisFDM viewer (gcode_viewer.html PP block and machine_mesh.py): U tilts the table about Y and V turns it about Z; the work origin is the centre of the 70 mm round plate on its surface, where both axes cross (part z offset 0). The Y stage carries the table, so joint Y runs opposite to the part; U is written with the opposite sign of the right-hand tilt about Y. Limits from the viewer: U -70..120 deg, X -110..110 mm, Y -70..40 mm; V turns continuously. Maximum speeds X/Y/Z/U/V 20000/20000/2400/20000/20000 mm/min or deg/min (config.g M203). RepRapFirmware applies F to the combined XYZUV length with degrees counted as mm, so F is chosen per move to keep the planned tip speed on the part. Printable height 100 mm above the plate: the lab's end G-code already lifts the head to Z95, and parts may overhang the 70 mm plate as long as their footprint sits on it (head, table and cradle clearance is checked per move). Head and table envelope from the lab's extruder.stl, rotary_table.stl and cradle.stl, 0.3 mm margins. Start and end follow the lab's propeller.gcode: G28 is left to the operator, the filament wiper macro primes the nozzle, the head lifts along the tool axis before the table flattens.",
+	"printer_technology": "FFF",
+	"printable_area": [
+		"35.000x0.000",
+		"34.701x4.568",
+		"33.807x9.059",
+		"32.336x13.394",
+		"30.311x17.500",
+		"27.767x21.307",
+		"24.749x24.749",
+		"21.307x27.767",
+		"17.500x30.311",
+		"13.394x32.336",
+		"9.059x33.807",
+		"4.568x34.701",
+		"0.000x35.000",
+		"-4.568x34.701",
+		"-9.059x33.807",
+		"-13.394x32.336",
+		"-17.500x30.311",
+		"-21.307x27.767",
+		"-24.749x24.749",
+		"-27.767x21.307",
+		"-30.311x17.500",
+		"-32.336x13.394",
+		"-33.807x9.059",
+		"-34.701x4.568",
+		"-35.000x0.000",
+		"-34.701x-4.568",
+		"-33.807x-9.059",
+		"-32.336x-13.394",
+		"-30.311x-17.500",
+		"-27.767x-21.307",
+		"-24.749x-24.749",
+		"-21.307x-27.767",
+		"-17.500x-30.311",
+		"-13.394x-32.336",
+		"-9.059x-33.807",
+		"-4.568x-34.701",
+		"0.000x-35.000",
+		"4.568x-34.701",
+		"9.059x-33.807",
+		"13.394x-32.336",
+		"17.500x-30.311",
+		"21.307x-27.767",
+		"24.749x-24.749",
+		"27.767x-21.307",
+		"30.311x-17.500",
+		"32.336x-13.394",
+		"33.807x-9.059",
+		"34.701x-4.568"
+	],
+	"printable_height": "100",
+	"nozzle_diameter": [
+		"0.4"
+	],
+	"machine_max_speed_x": [
+		"333.333",
+		"333.333"
+	],
+	"machine_max_speed_y": [
+		"333.333",
+		"333.333"
+	],
+	"machine_max_speed_z": [
+		"40",
+		"40"
+	],
+	"machine_max_speed_e": [
+		"120",
+		"120"
+	],
+	"machine_max_acceleration_x": [
+		"1000",
+		"1000"
+	],
+	"machine_max_acceleration_y": [
+		"1000",
+		"1000"
+	],
+	"machine_max_acceleration_z": [
+		"200",
+		"200"
+	],
+	"machine_max_acceleration_e": [
+		"5000",
+		"5000"
+	],
+	"machine_max_acceleration_extruding": [
+		"1000",
+		"1000"
+	],
+	"machine_max_acceleration_retracting": [
+		"1250",
+		"1250"
+	],
+	"machine_max_acceleration_travel": [
+		"1000",
+		"1000"
+	],
+	"machine_max_jerk_x": [
+		"10",
+		"10"
+	],
+	"machine_max_jerk_y": [
+		"10",
+		"10"
+	],
+	"machine_max_jerk_z": [
+		"0.4",
+		"0.4"
+	],
+	"machine_max_jerk_e": [
+		"4.5",
+		"4.5"
+	],
+	"emit_machine_limits_to_gcode": "0",
+	"nonplanar_head": "goethelab-5axisfdm",
+	"nonplanar_kinematics": "table_bc",
+	"rotary_axis_letters": "UV",
+	"rotary_feed_mode": "rrf_combined",
+	"rotary_axis_limits": [
+		"-70",
+		"120",
+		"-360",
+		"360"
+	],
+	"rotary_axis_continuous": [
+		"0",
+		"1"
+	],
+	"rotary_max_speed": [
+		"333.333",
+		"333.333"
+	],
+	"rotary_pivot": [
+		"0",
+		"0",
+		"0"
+	],
+	"rotary_tool_length": "50",
+	"rotary_tool_mount": [
+		"0",
+		"0",
+		"50"
+	],
+	"rotary_table_height": "0",
+	"rotary_plate_overhang": "1",
+	"rotary_linear_moves_table": [
+		"0",
+		"1",
+		"0"
+	],
+	"rotary_axis_home": [
+		"0",
+		"0"
+	],
+	"rotary_axis_reversed": [
+		"1",
+		"0"
+	],
+	"rotary_firmware_rtcp": "0",
+	"rotary_inverse_time_feed": "0",
+	"nonplanar_max_tilt": "120",
+	"default_print_profile": "0.20mm Smoothest tops @GoetheLab",
+	"default_nozzle_volume_type": [
+		"Standard"
+	],
+	"extruder_type": [
+		"Direct Drive"
+	],
+	"extruder_variant_list": [
+		"Direct Drive Standard"
+	],
+	"printer_extruder_id": [
+		"1"
+	],
+	"printer_extruder_variant": [
+		"Direct Drive Standard"
+	],
+	"gcode_flavor": "reprapfirmware",
+	"use_relative_e_distances": "1",
+	"retraction_length": [
+		"1.5"
+	],
+	"retraction_speed": [
+		"33"
+	],
+	"deretraction_speed": [
+		"33"
+	],
+	"machine_start_gcode": "; part z offset: 0\nM104 S[first_layer_temperature] ; preheat nozzle\nM140 S[first_layer_bed_temperature] ; rotary table is not heated\nG90\nM83\n;G28 ; the operator homes before the job\nM109 S[first_layer_temperature] ; wait for nozzle temperature\nM98 P/macros/filamentWiper ; clean and prime the nozzle\nM400\nM83\nG0 Z45 F2400 ; rise straight up before any XY move\nG0 X0 Y0 Z45 U0 V0 F4800 ; table flat, nozzle over the plate centre",
+	"machine_end_gcode": "G91\nG1 Z10 F2400 ; lift along the tool axis before the table flattens\nG90\nG1 Z95 F2400\nG1 X0 Y0 U0 F4800 ; flatten the table\nM104 S0\nM140 S0\nM107",
+	"before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;[layer_z]\n",
+	"layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
+	"thumbnails": ""
+}
