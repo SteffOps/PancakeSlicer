@@ -3,6 +3,7 @@
 #include "libslic3r/ExtrusionEntity.hpp"
 #include "libslic3r/GCode/GCodeProcessor.hpp"
 #include "libslic3r/GCode/ToolKinematics.hpp"
+#include "libslic3r/Geometry.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
@@ -48,9 +49,12 @@ void write_moves(const std::string &path, const GCodeProcessorResult &result, co
 {
     const char *road_ids_env = std::getenv("NP_NATIVE_ROAD_IDS");
     const bool road_ids = road_ids_env != nullptr && *road_ids_env != '\0' && std::string(road_ids_env) != "0";
-    // Rotary jobs carry each move's commanded rotary axis values in the A, B and C slots of the layout (degrees).
+    // Rotary jobs carry each move's kinematic rotary angles in the A, B and C slots of the layout (degrees): the
+    // commanded axis values with the profile's home offset and reversed direction taken out, so a viewer can turn
+    // the table or head by them directly.
+    const auto *rotary = dynamic_cast<const RotaryKinematics *>(kinematics);
     const RotaryLayout layout = kinematics != nullptr ? kinematics->layout() : RotaryLayout::None;
-    const bool oriented = layout != RotaryLayout::None && result.joints.size() == result.moves.size();
+    const bool oriented = rotary != nullptr && layout != RotaryLayout::None && result.joints.size() == result.moves.size();
     const std::array<int, 2> slot = layout == RotaryLayout::TableAC ? std::array<int, 2>{0, 2} :
                                     layout == RotaryLayout::HeadAB  ? std::array<int, 2>{0, 1} : std::array<int, 2>{1, 2};
     const uint32_t orientation_flags = !oriented ? 0u :
@@ -133,7 +137,8 @@ void write_moves(const std::string &path, const GCodeProcessorResult &result, co
                 move_le(out, result.state(move).native_road_id);
             if (oriented) {
                 float pose[3] = {0.f, 0.f, 0.f};
-                for (int i = 0; i < 2; ++i) pose[slot[i]] = float(result.joints[move_index].rot[i]);
+                const std::array<double, 2> angles = rotary->kinematic_angles(result.joints[move_index]);
+                for (int i = 0; i < 2; ++i) pose[slot[i]] = float(Geometry::rad2deg(angles[i]));
                 for (float value : pose) move_float(out, value);
                 move_float(out, 0.f);
             }
