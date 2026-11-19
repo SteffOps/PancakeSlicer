@@ -418,7 +418,8 @@ export class MachineSim {
       this.carY.updateMatrixWorld(true);
       this.tableMatrix.copy(this.tableC.matrixWorld);
       this.setVisible(true);
-      this.simNozzle.visible = true;
+      // The GoetheLab extruder mesh carries its own custom hotend and nozzle.
+      this.simNozzle.visible = !this.loadedGoetheLab;
       return this.tableMatrix;
     }
 
