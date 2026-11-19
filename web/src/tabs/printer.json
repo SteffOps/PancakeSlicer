@@ -690,6 +690,7 @@
             "rotary_axis_reversed",
             "rotary_tool_length",
             "rotary_table_height",
+            "rotary_plate_overhang",
             "rotary_firmware_rtcp",
             "rotary_inverse_time_feed"
           ],
@@ -837,6 +838,15 @@
               "source": "src/slic3r/GUI/Tab.cpp:5545",
               "modes": {
                 "rotary_table_height": "Advanced"
+              }
+            },
+            {
+              "options": [
+                "rotary_plate_overhang"
+              ],
+              "source": "src/slic3r/GUI/Tab.cpp:5546",
+              "modes": {
+                "rotary_plate_overhang": "Advanced"
               }
             },
             {
@@ -2306,6 +2316,7 @@
     "rotary_axis_reversed": "Advanced",
     "rotary_tool_length": "Advanced",
     "rotary_table_height": "Advanced",
+    "rotary_plate_overhang": "Advanced",
     "rotary_firmware_rtcp": "Advanced",
     "rotary_inverse_time_feed": "Advanced",
     "full_power_legend": "Develop",
@@ -2738,6 +2749,15 @@
     {
       "options": [
         "rotary_table_height"
+      ],
+      "condition": "(nonplanar_kinematics != \"none\")",
+      "effect": "visible",
+      "source": "src/slic3r/GUI/Tab.cpp:6728",
+      "condition_source": "rotary"
+    },
+    {
+      "options": [
+        "rotary_plate_overhang"
       ],
       "condition": "(nonplanar_kinematics != \"none\")",
       "effect": "visible",

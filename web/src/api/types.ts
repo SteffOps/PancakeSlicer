@@ -28,17 +28,18 @@ export interface ProgressEvent {
 
 export interface PlateJson {
   objects: {
-    file: string;
+    file?: string;
     name: string;
     extruder?: number;
-    instances: { x: number; y: number; rot: number; z?: number; printable?: boolean }[];
+    instances: { x?: number; y?: number; rot?: number; z?: number; printable?: boolean; auto_drop?: boolean; transform?: { offset: [number, number, number] } }[];
+    preserve_volume_order?: boolean;
     plate?: number;
     paint?: Record<string, Record<string, string>>;
     brim_ears?: { x: number; y: number; z: number; radius: number }[];
     layer_height_profile?: number[];
     ranges?: { z: [number, number]; layer_height: number; settings: Record<string, string> }[];
     settings?: Record<string, string>;
-    volumes?: { file: string; type: string; name: string; extruder?: number; settings?: Record<string, string>; paint?: Record<string, Record<string, string>> }[];
+    volumes?: { file: string; type: string; name: string; mesh_space?: 'volume'; extruder?: number; settings?: Record<string, string>; paint?: Record<string, Record<string, string>> }[];
   }[];
   plates?: { index: number; name: string; settings: Record<string, string>; locked?: boolean }[];
 }

@@ -39,6 +39,8 @@ import { setAssembly, useAssembly } from '../plater/assembly';
 import { Sep } from '../separator';
 import { slotFilaments } from '../profiles/slots';
 import { PagePortal, usePageLeave } from './PageLayer';
+import { useAdvancedMode } from '../staged';
+import { openAssemblyDialog } from '../plater/assembly-dialog';
 
 const PAINT_GIZMOS: [PaintKind, string, string, string][] = [
   ['support', 'toolbar_support', 'Support painting', 'L'],
@@ -62,6 +64,7 @@ const menuGlyph = (name: string) => <ToolGlyph name={name} size={16} />;
 const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? 'Cmd' : 'Ctrl';
 
 export function CanvasToolbar() {
+  const advanced = useAdvancedMode();
   const gizmo = useStore((s) => s.gizmo);
   const hasObjects = useStore((s) => s.objects.length > 0);
   const meshPlates = useStore(canAddPlate);
@@ -115,7 +118,7 @@ export function CanvasToolbar() {
     <span ref={arrangeAt} style={{display: 'inline-flex'}}><ToolButton icon="toolbar_arrange" name="Arrange" keys="A" active={arranging} unavailable={!hasObjects && !arranging && 'add an object'} onClick={() => setArranging(!arranging)}/></span>
     {arranging && <ArrangeOptions at={arrangeAt.current}/>}
     <ToolButton icon="toolbar_orient" name="Auto orient" keys="Q" unavailable={!hasObjects ? 'add an object' : project && 'not in an opened 3MF project'} onClick={e => toolbarOperation('orient', e.shiftKey)}/>
-    <MenuButton label="Add model" className="icon-btn tb-tool-btn" items={[{ label: 'Add model…', shortcut: `${MOD}+I`, action: openFileDialog }, { label: 'Import from URL…', action: () => openUrlImport() }]}><ToolGlyph name="toolbar_open" size={22} /></MenuButton>
+    <MenuButton label="Add model" className="icon-btn tb-tool-btn" items={[{ label: 'Add model…', shortcut: `${MOD}+I`, action: openFileDialog }, ...(advanced ? [{ label: 'Add assembly…', action: openAssemblyDialog }] : []), { label: 'Import from URL…', action: () => openUrlImport() }]}><ToolGlyph name="toolbar_open" size={22} /></MenuButton>
     <MenuButton className="btn-ghost canvas-more" label="Model tools" items={rare}>Tools<Caret/></MenuButton>
   </div>;
 }

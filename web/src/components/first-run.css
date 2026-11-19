@@ -1,4 +1,4 @@
-:where(.orca-parity) .empty-plate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; width: min(500px, calc(100% - 2 * var(--s-5))); max-height: calc(100% - 80px); display: flex; flex-direction: column; gap: var(--s-4); }
+:where(.orca-parity) .empty-plate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; width: min(560px, calc(100% - 2 * var(--s-5))); max-height: calc(100% - 80px); display: flex; flex-direction: column; gap: var(--s-4); }
 :where(.orca-parity) .fr-card { min-height: 0; overflow: auto; display: flex; flex-direction: column; background: var(--panel); color: var(--ink);
   border: 1px solid var(--line-strong); border-radius: var(--r-3); font: var(--t-body); }
 
@@ -22,6 +22,8 @@
 :where(.orca-parity) .fr-sample { background: none; border: 0; border-radius: var(--r-1); padding: var(--s-1) var(--s-3); color: var(--ink); font: var(--t-body); cursor: pointer; -webkit-touch-callout: none; user-select: none;
   text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 :where(.orca-parity) .fr-sample:hover { background: var(--sunken); text-decoration-color: currentColor; }
+:where(.orca-parity) .fr-samples.fr-advanced { width: 100%; margin-top: var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--line); }
+:where(.orca-parity) .fr-adv-tag { padding: 1px 6px; border-radius: var(--r-1); background: var(--sunken); border: 1px solid var(--line-strong); color: var(--ink-2); font: var(--t-label); letter-spacing: 0.02em; text-transform: uppercase; }
 
 :where(.orca-parity) .canvas-area.drag-over .fr-card { border-color: var(--accent-text); }
 :where(.orca-parity) .canvas-area.drag-over .fr-drop { background: var(--selection-fill); }

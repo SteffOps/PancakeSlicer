@@ -119,7 +119,7 @@ export const Field = memo(function Field(props: {
   useEffect(() => setUnmixed(false), [props.mixed]);
   const [key, idx] = splitKey(props.optKey);
   const labelId = useId();
-  const baseDef = OPTIONS[key];
+  const baseDef = OPTIONS[key] ?? (props.definition?.type ? { key, mode: 'simple', ...props.definition } as OptionDef : undefined);
   if (!baseDef) return null;
   const def: OptionDef = { ...baseDef, ...props.definition, min: baseDef.min, max: (props.mode ? baseDef.max_by_mode?.[props.mode] : undefined) ?? baseDef.max };
   const vector = def.type.endsWith('s') && (props.optKey.includes('#') || !['points', 'points_groups', 'ints_groups'].includes(def.type));
@@ -255,6 +255,21 @@ const afterPaint = (run: () => void) => { flushCommit(); pendingCommit = run; re
 export function NumberBox({ labelledBy, label, value, min, max, unit, readOnly, onCommit }: { labelledBy: string; label: string; value: number; min: number; max: number; unit: string; readOnly?: boolean; onCommit(value: number): void }) {
   const def = { key: '', type: 'int', label, min, max, sidetext: unit, mode: 'simple' } as unknown as OptionDef;
   return <LabelId.Provider value={labelledBy}><span className="opt-field number-box"><TextBox numeric spin value={String(Math.round(value))} label={label} def={def} readOnly={readOnly} onCommit={(v) => onCommit(Number(v))} /></span></LabelId.Provider>;
+}
+
+export function TripleField({ optKey, label, values, dirty, onCommit, onReset }: { optKey: string; label: string; values: [number, number, number]; dirty: boolean;
+  onCommit(values: [number, number, number]): void; onReset(): void }) {
+  const labelId = useId();
+  const def = { key: optKey, type: 'float', label, mode: 'simple' } as OptionDef;
+  return <div className="opt-line" data-opt={optKey} data-modified={dirty ? 'unsaved' : undefined}>
+    <span className={`opt-label ${dirty ? 'modified' : ''}`} id={labelId}><span className="opt-label-text">{label}</span></span>
+    <fieldset className="opt-field control-triple"><LabelId.Provider value={labelId}>
+      {values.map((v, i) => <TextBox key={i} numeric value={String(v)} label={`${label} ${'XYZ'[i]}`} def={def}
+        onCommit={(text) => { const n = Number(text); if (Number.isFinite(n) && n !== v) onCommit(values.map((x, k) => k === i ? n : x) as [number, number, number]); }} />)}
+    </LabelId.Provider>
+      {dirty && <button type="button" className="reset-icon field-reset" title="Default" aria-label={`${label}: Default`} onClick={onReset}><Glyph name="undo" size={14} /></button>}
+    </fieldset>
+  </div>;
 }
 
 const DESKTOP_ONLY_HINT = 'Runs in the desktop app';

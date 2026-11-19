@@ -39,8 +39,26 @@ export interface Instance {
 export type VolumeType = 'part' | 'negative' | 'modifier' | 'support_blocker' | 'support_enforcer' | 'seam';
 export type SeamMode = 'center' | 'left' | 'right' | 'enforced' | 'blocked' | 'neutral';
 
+export type StagedStyle = 'flat' | 'hinge' | 'grow_cone';
+export type StagedTool = 'follow' | 'fixed_tilt';
+export type Vec3 = [number, number, number];
+export interface StagedPart {
+  stage: number;
+  style: StagedStyle;
+  point: Vec3;
+  dir: Vec3;
+  hingeStart: Vec3;
+  hingeAngle: number;
+  coneHalfAngle: number;
+  coneRadius: number;
+  tool: StagedTool;
+  tilt: number;
+  copies: number;
+}
+
 export interface Volume {
   seamMode?: SeamMode;
+  staged?: StagedPart;
   id: number;
   name: string;
   type: VolumeType;
@@ -110,6 +128,8 @@ export interface PlateObject {
   svg?: SvgSpec;
   units?: 'inch' | 'meter';
   layerProfile?: number[];
+  partName?: string;
+  staged?: StagedPart;
   project?: { buildIndex?: number; plateIndex?: number; plateOrigin?: [number, number]; file: string; placeholder: boolean; missing?: boolean; origin?: [number, number, number];
     saved?: { object: number; instance: number; instanceId: number; extruder: number; rotZ: number; item?: number[] };
     paintable?: boolean; paint?: Partial<Record<'support' | 'seam' | 'fuzzy' | 'color', Record<string, string>>>; partTris?: number[] };

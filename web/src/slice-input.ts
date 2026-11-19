@@ -7,6 +7,7 @@ import { effectiveLayerHeight } from './profiles/context';
 import { effectiveConfig, getState, presetEdits, printerPreset, resolvePreset, type LayerEvent, type Mix, type State } from './state/store';
 import { slotFilaments, slotIds, slotMixes } from './profiles/slots';
 import { plateSlots } from './printers/slot-check';
+import { stagedOrigin } from './staged';
 
 function eventArg(e: LayerEvent): string {
   const z = String(Math.round(e.z * 1e4) / 1e4);
@@ -101,7 +102,7 @@ export function plateSignature(s: State): string {
   return JSON.stringify({
     ...jobFields(s),
     resolved: [effectiveConfig(s, 'machine'), effectiveConfig(s, 'process'), ...slotFilaments(s).map((_, i) => effectiveConfig(s, 'filament', i))],
-    plate: s.project ? undefined : plateDescription(s.objects, firstLayer(s)),
+    plate: s.project ? undefined : plateDescription(s.objects, firstLayer(s), stagedOrigin(s)),
     files: s.project ? [fileId(s.project), ...projectEdits(s).added.map(meshSignature), ...projectEdits(s).volumes.map(({ o }) => meshSignature(o))] : s.objects.map(meshSignature),
   }, (key, value) => key === 'transform' && Array.isArray(value) ? value.map((v: number) => Math.round(v * 1e6) / 1e6)
     : value && typeof value === 'object' && !Array.isArray(value)

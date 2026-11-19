@@ -1,0 +1,2 @@
+:where(.orca-parity) .opt-field.control-triple > .control-number { grid-template-columns: minmax(0, 1fr); }
+:where(.orca-parity) .ol-settings.staged-parts .opt-line { --ctl-w: 168px; }

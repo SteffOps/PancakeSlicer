@@ -1,6 +1,6 @@
 export const MODE_LABELS: Record<string, string> = {
   off: 'Flat layers', auto: 'Auto', manual: 'Manual curved settings', oneshot: 'One-shot field', nonplanar_top: 'Curved tops', smooth_morph: 'Smooth morph', slant: 'Slant',
-  conformal_layers: 'Conformal layers',
+  conformal_layers: 'Conformal layers', staged: 'Staged regions (advanced)',
 };
 export const MODE_HELP: Record<string, string> = {
   off: 'Flat layers: classic horizontal layers from bottom to top. Fastest to slice and print.',

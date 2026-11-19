@@ -12,6 +12,7 @@ import type { PreviewData } from './data';
 import { SegmentRenderer, type DrawState, type FrameStats } from './renderer';
 import { binOf, type SurfaceGrid } from './surface-grid';
 import { toolAxis } from './pose';
+import { MachineSim, createNozzleAssembly } from './MachineSim';
 import { VOXEL_MM, voxelCentre } from './results';
 
 const SURFACE_LIFT_MM = 0.15;
@@ -47,7 +48,10 @@ export class PreviewScene {
   private area: THREE.Vector2[] = [];
   private shells = new THREE.Group();
   private shellMat = new THREE.MeshStandardMaterial({ color: sceneColors().shell, transparent: true, opacity: 0.35, depthWrite: false, roughness: 0.8 });
-  private tool: THREE.Mesh;
+  private tool: THREE.Group;
+  private machineSim: MachineSim;
+  private simEnabled = false;
+  private toolIndex: number | null = null;
   private surface: { mesh: THREE.Mesh; cells: Uint32Array; grid: SurfaceGrid } | null = null;
   private data: PreviewData | null = null;
   private uploaded = 0;
@@ -92,12 +96,14 @@ export class PreviewScene {
         this.request();
       }, STILL_MS);
     });
-    const cone = new THREE.ConeGeometry(1.2, 4, 24);
-    cone.rotateX(-Math.PI / 2);
-    cone.translate(0, 0, 2);
-    this.tool = new THREE.Mesh(cone, new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
+    this.tool = createNozzleAssembly();
     this.tool.visible = false;
     this.scene.add(this.tool);
+    this.machineSim = new MachineSim(() => {
+      this.syncPose();
+      this.request();
+    });
+    this.scene.add(this.machineSim.simNozzle);
     this.segments = new SegmentRenderer(this.renderer);
     const gl = this.renderer.getContext() as WebGL2RenderingContext;
     this.timer.ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
@@ -267,7 +273,8 @@ export class PreviewScene {
     this.dropBack();
     this.data = null;
     this.uploaded = 0;
-    this.tool.visible = false;
+    this.toolIndex = null;
+    this.syncPose();
     this.request();
   }
 
@@ -315,24 +322,74 @@ export class PreviewScene {
     slice();
   }
 
+  setMachineSim(enabled: boolean) {
+    if (this.simEnabled === enabled) return;
+    this.simEnabled = enabled;
+    this.syncPose();
+    this.request();
+  }
+
   setDrawState(s: DrawState, toolAt: number | null) {
     this.draw = { ...s, focusMask: this.draw.focusMask, diffColor: this.draw.diffColor };
     const d = this.data;
-    if (d && toolAt != null && toolAt < d.loaded) {
-      this.setToolPose(toolAt);
-    } else this.tool.visible = false;
+    this.toolIndex = d && toolAt != null && toolAt >= 0 && toolAt < d.loaded ? toolAt : null;
+    this.syncPose();
     this.request();
   }
 
   setToolPose(i: number, dir?: [number, number, number]) {
     const d = this.data;
-    if (!d || i < 0 || i >= d.loaded) { this.tool.visible = false; return; }
-    this.tool.position.fromArray(d.pos, i * 4);
-    const axis = new THREE.Vector3(...(dir ?? toolAxis(d, i)));
-    if (axis.lengthSq() < 1e-12) axis.set(0, 0, 1);
-    this.tool.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis.normalize());
-    this.tool.visible = true;
+    if (!d || i < 0 || i >= d.loaded) {
+      this.toolIndex = null;
+      this.syncPose();
+      return;
+    }
+    this.toolIndex = i;
+    this.syncPose(dir);
     this.request();
+  }
+
+  private syncPose(dir?: [number, number, number]) {
+    const d = this.data;
+    const idx = this.toolIndex;
+    const valid = idx != null && !!d && idx >= 0 && idx < d.loaded;
+    this.machineSim.update(d, valid ? idx : null, this.simEnabled);
+
+    if (this.machineSim.isTableRotary) {
+      this.tool.visible = false;
+      this.shells.matrixAutoUpdate = false;
+      this.shells.matrix.copy(this.machineSim.tableMatrix);
+      this.shells.matrixWorldNeedsUpdate = true;
+      if (this.bed) {
+        this.bed.matrixAutoUpdate = false;
+        this.bed.matrix.copy(this.machineSim.tableMatrix);
+        this.bed.matrixWorldNeedsUpdate = true;
+      }
+    } else {
+      this.shells.matrixAutoUpdate = true;
+      this.shells.position.set(0, 0, 0);
+      this.shells.rotation.set(0, 0, 0);
+      this.shells.scale.set(1, 1, 1);
+      this.shells.updateMatrix();
+      if (this.bed) {
+        this.bed.matrixAutoUpdate = true;
+        this.bed.position.set(0, 0, 0);
+        this.bed.rotation.set(0, 0, 0);
+        this.bed.scale.set(1, 1, 1);
+        this.bed.updateMatrix();
+      }
+      if (this.simEnabled && valid) {
+        this.tool.visible = false;
+      } else if (valid && d && idx != null) {
+        this.tool.position.fromArray(d.pos, idx * 4);
+        const axis = new THREE.Vector3(...(dir ?? toolAxis(d, idx)));
+        if (axis.lengthSq() < 1e-12) axis.set(0, 0, 1);
+        this.tool.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis.normalize());
+        this.tool.visible = true;
+      } else {
+        this.tool.visible = false;
+      }
+    }
   }
 
   pick(clientX: number, clientY: number): number | null {
@@ -343,7 +400,7 @@ export class PreviewScene {
     const pixel = this.camera instanceof THREE.PerspectiveCamera
       ? 2 * Math.tan(this.camera.fov * Math.PI / 360) * this.camera.position.distanceTo(this.controls.target) / rect.height
       : (this.camera.top - this.camera.bottom) / this.camera.zoom / rect.height;
-    return this.segments.pick(ray.ray, this.draw, 6 * pixel);
+    return this.segments.pick(ray.ray, this.draw, 6 * pixel, this.machineSim.isTableRotary ? this.machineSim.tableMatrix : undefined);
   }
 
   setFocus(mask: number | null) {
@@ -458,9 +515,27 @@ export class PreviewScene {
     }
     this.shells.visible = false;
     this.overlay.visible = false;
-    showBedFor(this.bed, this.camera);
+    const tableRotary = this.machineSim.isTableRotary;
+    if (tableRotary && this.machineSim.hasGoetheLabMeshes) {
+      if (this.bed) this.bed.visible = false;
+    } else {
+      showBedFor(this.bed, this.camera);
+    }
+    this.renderer.autoClear = true;
     this.renderer.render(this.scene, this.camera);
-    if (this.data) this.segments.render(this.camera, this.draw, Math.round(this.renderer.domElement.height * scale));
+    if (this.data) {
+      this.segments.render(
+        this.camera,
+        this.draw,
+        Math.round(this.renderer.domElement.height * scale),
+        tableRotary ? this.machineSim.tableMatrix : undefined
+      );
+    }
+    if (tableRotary) {
+      this.renderer.autoClear = false;
+      this.renderer.render(this.machineSim.overlayScene, this.camera);
+      this.renderer.autoClear = true;
+    }
     const removed = !!this.removed && this.diffVisible;
     if (this.shells.children.length || removed) {
       this.shells.visible = true;
@@ -468,12 +543,15 @@ export class PreviewScene {
       const bedVisible = this.bed?.visible;
       if (this.bed) this.bed.visible = false;
       const tv = this.tool.visible;
+      const snv = this.machineSim.simNozzle.visible;
       this.tool.visible = false;
+      this.machineSim.simNozzle.visible = false;
       this.renderer.autoClear = false;
       this.renderer.render(this.scene, this.camera);
       this.renderer.autoClear = true;
       if (this.bed) this.bed.visible = bedVisible!;
       this.tool.visible = tv;
+      this.machineSim.simNozzle.visible = snv;
     }
     if (scale < 1) {
       this.stretch(gl, scale);
@@ -581,6 +659,7 @@ void main() { frag = texture(tex, uv * scale); }`));
     this.unsubTheme();
     this.unwatchRatio();
     cancelAnimationFrame(this.frame);
+    this.machineSim.dispose();
     this.segments.dispose();
     this.back?.segments.dispose();
     this.spare?.dispose();

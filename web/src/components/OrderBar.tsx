@@ -32,7 +32,7 @@ function vertexAt(e: Float64Array, t: number): number {
   return lo;
 }
 
-export function OrderBar({ data, at, onSeek, gcodeOpen, onGcode, oneLayer, onOneLayer }: {
+export function OrderBar({ data, at, onSeek, gcodeOpen, onGcode, oneLayer, onOneLayer, machineSim, onMachineSim }: {
   data: PreviewData;
   at: number;
   onSeek(vertex: number): void;
@@ -40,6 +40,8 @@ export function OrderBar({ data, at, onSeek, gcodeOpen, onGcode, oneLayer, onOne
   onGcode(): void;
   oneLayer: boolean;
   onOneLayer(): void;
+  machineSim: boolean;
+  onMachineSim(): void;
 }) {
   const active = useStore(s => s.tab === 'preview');
   const e = useElapsed(data);
@@ -119,6 +121,12 @@ export function OrderBar({ data, at, onSeek, gcodeOpen, onGcode, oneLayer, onOne
       <span className="ob-layer">Layer {k == null ? '–' : k + 1}/{data.layers.length}</span>
       <Dropdown className="ob-rate" aria-label="Playback speed" value={rate} onValueChange={(next) => playback.send({ type: 'RATE', rate: Number(next) })} options={[...RATES.map((r) => ({ value: r, label: <>{r}×</> }))]} />
       <span className="ob-seg">
+        <button type="button" className="ob-btn ob-sim" aria-label="3D printer simulation (M)" title={machineSim ? 'Hide 3D printer simulation (M)' : 'Show 3D printer simulation (M)'} aria-pressed={machineSim} onClick={onMachineSim}>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M2.5 3.5h11M6 3.5v3.2L8 9.2l2-2.5V3.5" />
+            <path d="M3 12h10M5.2 12l.8 2h4l.8-2" />
+          </svg>
+        </button>
         <button type="button" className="ob-btn ob-one" aria-label="Show one layer (L)" aria-pressed={oneLayer} onClick={onOneLayer}><Glyph name="layers" /></button>
         <button type="button" className="ob-btn ob-gcode" aria-label="G-code viewer (C)" aria-pressed={gcodeOpen} onClick={onGcode}><Glyph name="code" /></button>
       </span>

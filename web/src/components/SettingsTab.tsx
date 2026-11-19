@@ -6,6 +6,7 @@ import { ExtruderRows } from '../profiles/ExtruderRows';
 import { optionIndex, selectedOptionValues, type ExtruderSelection } from '../multinozzle/config';
 import { PresetBar } from '../profiles/PresetBar';
 import { methodModes, RETIRED_GROUPS, SurfaceSettings, TOP_METHOD_KEYS } from './SurfaceSettings';
+import { useAdvancedMode } from '../staged';
 import { methodAvailability } from '../profiles/method-context';
 import { isMethodSettingSupported } from '../profiles/capabilities';
 import { NozzleField } from '../profiles/SetupRows';
@@ -57,6 +58,7 @@ export interface Aux { label: string; icon?: string; content: React.ReactNode; m
 export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overrides, readOnly = false, auxiliary }: { type: PresetType; slot?: number; compact?: boolean; hidePreset?: boolean; editor?: ProfileFields;
   overrides?: ObjectOverrides | null; readOnly?: boolean; auxiliary?: Aux | Aux[] }) {
   const { desc, error } = useTab(TAB_OF[type]);
+  useAdvancedMode();
   const overriddenKey = useStore((s) => type === 'process' && !overrides ? JSON.stringify(s.objects.reduce<Record<string, string[]>>((m, o) => {
     for (const k of Object.keys(o.settings)) (m[k] ??= []).push(o.name.replace(/\.(stl|obj|3mf|step|stp)$/i, ''));
     return m; }, {})) : '{}');

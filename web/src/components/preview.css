@@ -130,6 +130,7 @@
   font: var(--t-small); font-variant-numeric: tabular-nums; user-select: text; }
 :where(.orca-parity) .tool-position-row { display: flex; align-items: center; gap: var(--s-3); }
 :where(.orca-parity) .tool-axes { display: grid; grid-template-columns: repeat(3, 10ch); gap: 1ch; white-space: normal; }
+:where(.orca-parity) .tool-axes[data-fiveaxis='1'] { grid-template-columns: repeat(5, 9.2ch); }
 :where(.orca-parity) .tool-detail { display: flex; gap: 2ch; white-space: normal; color: var(--ink-2); }
 :where(.orca-parity) .tool-detail span:first-child { min-width: 11ch; }
 :where(.orca-parity) .tool-fold { width: var(--h-compact); height: var(--h-compact); border: 0; border-radius: var(--r-2); background: none; color: var(--ink-2); cursor: pointer; }

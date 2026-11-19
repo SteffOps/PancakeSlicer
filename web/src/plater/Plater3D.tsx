@@ -28,7 +28,8 @@ import { bedKey as bedCacheKey, buildBed, sceneColors, showBedFor } from './Bed'
 import { subscribeTheme } from '../theme';
 import { pixelRatio, watchPixelRatio } from './pixelRatio';
 import { raycastBvh, type Bvh } from './bvh';
-import { drawn, instanceBox, instanceMatrix, outsideBed, parsePoints, requestDisplay, volumeWorld } from './geometry';
+import { bedBounds, drawn, instanceBox, instanceMatrix, outsideBed, parsePoints, requestDisplay, volumeWorld } from './geometry';
+import { isStaged } from '../staged';
 import { cutNormal, cutPoint, cutTarget, setCut } from './cut';
 import { setSlant, slantAngles, slantNormal, slantPoint, slantTarget } from './slant';
 import { CONNECTOR, connectorAt, connectorWorld, planeRotation, planeUV, SECTORS } from './cutJoints';
@@ -407,6 +408,7 @@ export default function Plater3D() {
       selectionBounds.end();
     };
     const volumeMeshes = new Map<string, THREE.Mesh>();
+    const copyMeshes = new Map<string, THREE.Mesh>();
     const edgeFade = { value: new THREE.Vector2() };
     const edgeMaterials = new Map<number, THREE.ShaderMaterial>();
     const edgeMaterial = (body: THREE.Color) => {
@@ -573,6 +575,36 @@ void main() {
         if (!seenVolumes.has(key)) {
           scene.remove(mesh);
           volumeMeshes.delete(key);
+        }
+      const seenCopies = new Set<string>(), axis = bedBounds(area).center;
+      for (const o of s.objects) {
+        if (!isStaged(s, o)) continue;
+        const parts = [{ key: 'main', g: o.geometry, part: o.staged, extruder: o.extruder, at: (inst: Instance) => instanceMatrix(o, inst) },
+          ...(o.volumes ?? []).filter((v) => v.type === 'part').map((v) => ({ key: String(v.id), g: v.geometry, part: v.staged, extruder: v.extruder || o.extruder, at: (inst: Instance) => volumeWorld(o, inst, v) }))];
+        for (const inst of o.instances)
+          for (const p of parts)
+            for (let k = 1; k < (p.part?.copies ?? 1); k++) {
+              const key = `${inst.id}:${p.key}:${k}`;
+              seenCopies.add(key);
+              let mesh = copyMeshes.get(key);
+              if (!mesh || mesh.geometry !== p.g) {
+                if (mesh) scene.remove(mesh);
+                mesh = new THREE.Mesh(p.g);
+                mesh.matrixAutoUpdate = false;
+                mesh.raycast = () => {};
+                copyMeshes.set(key, mesh);
+                scene.add(mesh);
+              }
+              mesh.material = material(filamentColor(s, p.extruder), 'normal', false, true);
+              mesh.matrix.makeRotationZ(2 * Math.PI * k / p.part!.copies).premultiply(new THREE.Matrix4().makeTranslation(axis.x, axis.y, 0))
+                .multiply(new THREE.Matrix4().makeTranslation(-axis.x, -axis.y, 0)).multiply(p.at(inst));
+              mesh.matrixWorldNeedsUpdate = true;
+            }
+      }
+      for (const [key, mesh] of copyMeshes)
+        if (!seenCopies.has(key)) {
+          scene.remove(mesh);
+          copyMeshes.delete(key);
         }
       tint(s);
       for (const [id, mesh] of meshes)
@@ -1659,7 +1691,7 @@ void main() {
 
     let last: State | null = null, lastColours = '';
     let lastTower: [unknown, unknown, unknown] = [null, null, null];
-    const drawnEdits = (s: State) => viewOptions().overhang ? `${effectiveConfig(s, 'process').support_threshold_angle}` : '';
+    const drawnEdits = (s: State) => `${viewOptions().overhang ? effectiveConfig(s, 'process').support_threshold_angle : ''}|${s.objects.filter((o) => isStaged(s, o)).map((o) => o.id)}`;
     const sync = () => {
       const s = getState();
       if (s.wipeTower !== lastTower[0] || s.wipeTowerPos !== lastTower[1] || s.project !== lastTower[2]) {

@@ -446,16 +446,17 @@ export class SegmentRenderer {
     this.renderer.resetState();
   }
 
-  pick(ray: THREE.Ray, state: DrawState, tolerance: number): number | null {
+  pick(ray: THREE.Ray, state: DrawState, tolerance: number, modelMatrix?: THREE.Matrix4): number | null {
     const d = this.data;
     if (!d) return null;
+    const localRay = modelMatrix ? ray.clone().applyMatrix4(modelMatrix.clone().invert()) : ray;
     const point = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3(), onRay = new THREE.Vector3();
     const candidates: { block: Block; near: number }[] = [];
     for (const block of this.blocks) {
       if (block.end <= state.range[0] || block.first >= state.range[1]) continue;
       const box = block.box.clone().expandByScalar(tolerance);
-      if (box.containsPoint(ray.origin)) candidates.push({ block, near: 0 });
-      else if (ray.intersectBox(box, point)) candidates.push({ block, near: point.distanceTo(ray.origin) });
+      if (box.containsPoint(localRay.origin)) candidates.push({ block, near: 0 });
+      else if (localRay.intersectBox(box, point)) candidates.push({ block, near: point.distanceTo(localRay.origin) });
     }
     candidates.sort((a, b) => a.near - b.near);
     let best: number | null = null, depth = Infinity;
@@ -466,15 +467,15 @@ export class SegmentRenderer {
         if (!(state.typeMask & (1 << type)) || type === MoveType.Extrude && !(state.roleMask & (1 << d.role[i]))) continue;
         a.fromArray(d.pos, (i - 1) * 4); b.fromArray(d.pos, i * 4);
         const radius = tolerance + (type === MoveType.Extrude ? d.width[i] / 2 : TRAVEL_RADIUS);
-        if (ray.distanceSqToSegment(a, b, onRay, point) > radius * radius) continue;
-        const distance = onRay.distanceTo(ray.origin);
+        if (localRay.distanceSqToSegment(a, b, onRay, point) > radius * radius) continue;
+        const distance = onRay.distanceTo(localRay.origin);
         if (distance < depth) { best = i; depth = distance; }
       }
     }
     return best;
   }
 
-  render(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, state: DrawState, viewportHeight: number) {
+  render(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, state: DrawState, viewportHeight: number, modelMatrix?: THREE.Matrix4) {
     const d = this.data;
     if (!d || !this.blocks.length) return;
     const t0 = performance.now();
@@ -487,10 +488,17 @@ export class SegmentRenderer {
     gl.disable(gl.BLEND);
     gl.disable(gl.CULL_FACE);
     const u = this.u;
-    gl.uniformMatrix4fv(u.view_matrix, false, camera.matrixWorldInverse.elements);
+    const viewMatrix = modelMatrix
+      ? new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, modelMatrix)
+      : camera.matrixWorldInverse;
+    const invModel = modelMatrix ? modelMatrix.clone().invert() : null;
+    const camPos = invModel ? camera.position.clone().applyMatrix4(invModel) : camera.position;
+    const lightDir = new THREE.Vector3(-0.4574957, 0.4574957, 0.7624929);
+    if (invModel) lightDir.transformDirection(invModel).normalize();
+    gl.uniformMatrix4fv(u.view_matrix, false, viewMatrix.elements);
     gl.uniformMatrix4fv(u.projection_matrix, false, camera.projectionMatrix.elements);
-    gl.uniform3f(u.camera_position, camera.position.x, camera.position.y, camera.position.z);
-    gl.uniform3f(u.light_top_dir, -0.4574957, 0.4574957, 0.7624929);
+    gl.uniform3f(u.camera_position, camPos.x, camPos.y, camPos.z);
+    gl.uniform3f(u.light_top_dir, lightDir.x, lightDir.y, lightDir.z);
     gl.uniform2i(u.range, state.range[0], state.range[1]);
     gl.uniform1i(u.role_mask, state.roleMask);
     gl.uniform1i(u.type_mask, state.typeMask);
@@ -515,7 +523,7 @@ export class SegmentRenderer {
     bind(5, this.diffTex, u.diff_tex);
 
     const frustum = new THREE.Frustum().setFromProjectionMatrix(
-      new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+      new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, viewMatrix));
     const k = camera instanceof THREE.PerspectiveCamera ? (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, viewportHeight) : 0;
     const [r0, r1] = state.range;
     const stats: FrameStats = { blocks: 0, culled: 0, lodBlocks: 0, segments: 0, cpuMs: 0 };
@@ -532,7 +540,7 @@ export class SegmentRenderer {
       if (!frustum.intersectsBox(b.box)) { ++stats.culled; continue; }
       ++stats.blocks;
       const lodRange = d.lodBlocks.length > bi * 2 + 1 ? [d.lodBlocks[bi * 2], d.lodBlocks[bi * 2 + 1]] : null;
-      const far = this.lodEnabled && (camera instanceof THREE.OrthographicCamera ? (camera.top - camera.bottom) / camera.zoom / Math.max(1, viewportHeight) : b.box.distanceToPoint(camera.position) * k) >= this.lodPixel;
+      const far = this.lodEnabled && (camera instanceof THREE.OrthographicCamera ? (camera.top - camera.bottom) / camera.zoom / Math.max(1, viewportHeight) : b.box.distanceToPoint(camPos) * k) >= this.lodPixel;
       const merged = far && lodRange != null && s0 === b.first && s1 === b.end;
       if (far !== ribbonMode) {
         gl.bindVertexArray(far ? this.ribbonVao : this.vao);
@@ -552,9 +560,9 @@ export class SegmentRenderer {
       gl.useProgram(this.optProg);
       gl.bindVertexArray(this.optVao);
       const o = this.ou;
-      gl.uniformMatrix4fv(o.view_matrix, false, camera.matrixWorldInverse.elements);
+      gl.uniformMatrix4fv(o.view_matrix, false, viewMatrix.elements);
       gl.uniformMatrix4fv(o.projection_matrix, false, camera.projectionMatrix.elements);
-      gl.uniform3f(o.light_top_dir, -0.4574957, 0.4574957, 0.7624929);
+      gl.uniform3f(o.light_top_dir, lightDir.x, lightDir.y, lightDir.z);
       gl.uniform2i(o.range, state.range[0], state.range[1]);
       gl.uniform1i(o.type_mask, state.optionMask);
       bind(0, this.posTex, o.position_tex);

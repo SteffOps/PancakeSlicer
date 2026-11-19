@@ -10,6 +10,7 @@ import type { MeshData, MeshIn, MeshOut } from './mesh.worker';
 import type { DisplayMesh } from './display-lod';
 import type { ProjectItem, ProjectMaterials } from './threemf';
 import { paintJson } from './paint';
+import { stagedConfig } from '../staged';
 
 
 const DEG = Math.PI / 180;
@@ -347,7 +348,10 @@ let nativePlate: NativePlate | null = null;
 export const setNativePlate = (f: NativePlate) => { nativePlate = f; };
 const nativeFiles = new WeakMap<PlateJson['objects'][number], { name: string; blob: () => Blob | Promise<Blob> }[]>();
 
-export function plateDescription(objects: PlateObject[], firstLayer = 0.2): PlateJson {
+export type StagedOrigin = (o: PlateObject) => [number, number] | null;
+const stagedFiles = new WeakMap<PlateJson['objects'][number], THREE.Matrix4[]>();
+
+export function plateDescription(objects: PlateObject[], firstLayer = 0.2, staged: StagedOrigin = () => null): PlateJson {
   const used = new Set<string>();
   const plate: PlateJson = { objects: [] };
   for (const o of objects) {
@@ -366,6 +370,27 @@ export function plateDescription(objects: PlateObject[], firstLayer = 0.2): Plat
       const b = instanceBox(o, i);
       return { x: (b.min.x + b.max.x) / 2, y: (b.min.y + b.max.y) / 2, z: b.min.z };
     };
+    const origin = staged(o);
+    if (origin) {
+      const [first] = o.instances, shift = new T3.Matrix4().makeTranslation(-origin[0], -origin[1], 0);
+      const parts = (o.volumes ?? []).filter((v) => v.type === 'part');
+      const entry: PlateJson['objects'][number] = {
+        name: o.name.replace(/\.(stl|obj)$/i, ''),
+        extruder: o.extruder,
+        preserve_volume_order: true,
+        instances: o.instances.map((i) => ({ transform: { offset: [round(origin[0] + i.x - first.x), round(origin[1] + i.y - first.y), round((i.z ?? 0) - (first.z ?? 0))] },
+          printable: i.printable !== false, auto_drop: false })),
+        ...(Object.keys(o.settings).length ? { settings: settings(o.settings) } : {}),
+        volumes: [{ file: file.replace(/\.stl$/, '.v0.stl'), type: 'part', mesh_space: 'volume' as const, name: o.partName ?? o.name.replace(/\.(stl|obj)$/i, ''),
+          ...(paintJson(o) ? { paint: paintJson(o) } : {}), settings: stagedConfig(o.staged) },
+        ...parts.map((v, k) => ({ file: file.replace(/\.stl$/, `.v${k + 1}.stl`), type: 'part', mesh_space: 'volume' as const, name: v.name,
+          ...(paintJson(v) ? { paint: paintJson(v) } : {}), ...(v.extruder ? { extruder: v.extruder } : {}),
+          settings: settings({ ...v.settings, ...stagedConfig(v.staged) }) }))],
+      };
+      stagedFiles.set(entry, [shift.clone().multiply(instanceMatrix(o, first)), ...parts.map((v) => shift.clone().multiply(volumeWorld(o, first, v)))]);
+      plate.objects.push(entry);
+      continue;
+    }
     plate.objects.push({
       file,
       name: o.name.replace(/\.(stl|obj)$/i, ''),
@@ -390,13 +415,19 @@ export function plateDescription(objects: PlateObject[], firstLayer = 0.2): Plat
   return plate;
 }
 
-export async function plateJson(objects: PlateObject[], firstLayer?: number): Promise<{ plate: PlateJson; files: { name: string; blob: Blob }[] }> {
-  const plate = plateDescription(objects, firstLayer);
+export async function plateJson(objects: PlateObject[], firstLayer?: number, staged?: StagedOrigin): Promise<{ plate: PlateJson; files: { name: string; blob: Blob }[] }> {
+  const plate = plateDescription(objects, firstLayer, staged);
   const files = new Map<string, Blob>();
   await Promise.all(plate.objects.map(async (entry, i) => {
     const own = nativeFiles.get(entry);
     if (own) return Promise.all(own.map(async (f) => files.set(f.name, await f.blob())));
-    files.set(entry.file, await bakeStl(objects[i]));
+    const placed = stagedFiles.get(entry);
+    if (placed) {
+      const geometries = [objects[i].geometry, ...(objects[i].volumes ?? []).filter((v) => v.type === 'part').map((v) => v.geometry)];
+      const baked = await Promise.all(geometries.map((g, k) => bake(g, placed[k])));
+      return entry.volumes!.forEach((v, k) => files.set(v.file, baked[k]));
+    }
+    files.set(entry.file!, await bakeStl(objects[i]));
     const vs = await Promise.all((objects[i].volumes ?? []).map((v) => bakeVolume(objects[i], v)));
     (entry.volumes ?? []).forEach((v, k) => files.set(v.file, vs[k]));
   }));
@@ -489,7 +520,9 @@ export function nearestFreeSpot(objects: PlateObject[], size: THREE.Vector2, fro
   return best;
 }
 
-export function outsideBed(objects: PlateObject[], area: THREE.Vector2[], height: number): Set<number> {
+// overhang: the printer's plate is a small rotary table (rotary_plate_overhang), so only the footprint resting on the
+// plate has to lie inside the printable area; the engine checks head, table and cradle clearance per move.
+export function outsideBed(objects: PlateObject[], area: THREE.Vector2[], height: number, overhang = false): Set<number> {
   const out = new Set<number>();
   const poly = area;
   const inside = (x: number, y: number) => {
@@ -503,14 +536,52 @@ export function outsideBed(objects: PlateObject[], area: THREE.Vector2[], height
     }
     return c;
   };
+  const centre = bedBounds(area).center;
   for (const o of objects)
     for (const i of o.instances) {
       if (i.printable === false) continue;
       const b = instanceBox(o, i);
       const corners = [[b.min.x, b.min.y], [b.max.x, b.min.y], [b.max.x, b.max.y], [b.min.x, b.max.y]];
-      if (b.max.z > height + 1e-3 || !corners.every(([x, y]) => inside(x, y))) out.add(i.id);
+      const boxed = b.max.z <= height + 1e-3 && corners.every(([x, y]) => inside(x, y));
+      if (o.staged || overhang ? !partsInside(o, i, inside, height, centre, boxed, overhang) : !boxed) out.add(i.id);
     }
   return out;
+}
+
+const partsChecked = new WeakMap<PlateObject, Map<string, boolean>>();
+const FOOTPRINT_BAND = 0.3;
+function partsInside(o: PlateObject, inst: Instance, inside: (x: number, y: number) => boolean, height: number, centre: THREE.Vector2, boxed: boolean, overhang: boolean): boolean {
+  const parts = [{ g: o.geometry, m: instanceMatrix(o, inst), copies: o.staged?.copies ?? 1 },
+    ...(o.volumes ?? []).filter((v) => v.type === 'part').map((v) => ({ g: v.geometry, m: volumeWorld(o, inst, v), copies: v.staged?.copies ?? 1 }))];
+  if (boxed && parts.every((p) => p.copies <= 1)) return true;
+  const key = `${inst.id},${inst.x},${inst.y},${inst.z},${inst.rotZ},${height},${centre.x},${centre.y},${inside(centre.x, centre.y)},${overhang}`;
+  const cache = partsChecked.get(o) ?? new Map<string, boolean>();
+  partsChecked.set(o, cache);
+  const hit = cache.get(key);
+  if (hit !== undefined) return hit;
+  // The footprint test needs every vertex near the plate: the hull can skip a flare just above the bottom face.
+  const points = (g: THREE.BufferGeometry) => !overhang && (g.userData.hull as Float32Array | undefined)?.length ? g.userData.hull as Float32Array : g.attributes.position.array as Float32Array;
+  let floor = Infinity;
+  if (overhang)
+    for (const { g, m } of parts) {
+      const p = points(g), e = m.elements;
+      for (let k = 0; k < p.length; k += 3) floor = Math.min(floor, e[2] * p[k] + e[6] * p[k + 1] + e[10] * p[k + 2] + e[14]);
+    }
+  const ok = parts.every(({ g, m, copies }) => {
+    const p = points(g), e = m.elements;
+    const turns = Array.from({ length: Math.max(1, copies) }, (_, k) => [Math.cos(2 * Math.PI * k / copies), Math.sin(2 * Math.PI * k / copies)]);
+    for (let k = 0; k < p.length; k += 3) {
+      const x = e[0] * p[k] + e[4] * p[k + 1] + e[8] * p[k + 2] + e[12] - centre.x, y = e[1] * p[k] + e[5] * p[k + 1] + e[9] * p[k + 2] + e[13] - centre.y;
+      const z = e[2] * p[k] + e[6] * p[k + 1] + e[10] * p[k + 2] + e[14];
+      if (z > height + 1e-3) return false;
+      if (overhang && z > floor + FOOTPRINT_BAND) continue;
+      if (!turns.every(([c, s]) => inside(centre.x + c * x - s * y, centre.y + s * x + c * y))) return false;
+    }
+    return true;
+  });
+  if (cache.size > 16) cache.clear();
+  cache.set(key, ok);
+  return ok;
 }
 
 export function centred(g: THREE.BufferGeometry): [THREE.BufferGeometry, THREE.Matrix4] {

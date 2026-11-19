@@ -6,6 +6,9 @@ import { addPrimitive, addPrimitiveObject, loadVolume, SEAM_MODES, SHAPES, TYPE_
 import { ActionMenu, type MenuEntry as Item } from './Menu';
 import { canAddPlate, deletePlate, editPlateName } from '../plater/plates';
 import { SlotChip, slotsOf } from './SlotChip';
+import { useAdvancedMode } from '../staged';
+import { useWorkflows } from '../plater/workflow-list';
+import { openAssemblyDialog } from '../plater/assembly-dialog';
 
 const HANDY = [['Orca Cube'], ['OrcaSliced Combo'], ['Orca Badge'], ['Orca Tolerance Test'], ['3DBenchy'], ['Cali Cat'], ['Autodesk FDM Test'], ['Voron Cube'],
   ['Stanford Bunny'], ['Orca String Hell']] as const;
@@ -16,6 +19,8 @@ const exportStl = (selection: boolean, multi = false) => import('../exportStl').
 export default function ContextMenu() {
   const menu = useStore((s) => s.contextMenu);
   const s = useStore((st) => st);
+  const advanced = useAdvancedMode();
+  const workflows = useWorkflows(advanced);
   const close = () => setState({ contextMenu: null });
   if (!menu) return null;
   const o = s.objects.find((ob) => ob.id === menu.object);
@@ -106,9 +111,11 @@ export default function ContextMenu() {
     ...(all ? [{ label: 'Export as STLs...', output: true, action: () => void exportStl(true, true), disabled: !editable }] : []),
   ] : [
     { label: 'Add Primitive', disabled: !!s.project, sub: SHAPES.map((shape) => ({ label: shape, action: () => void addPrimitiveObject(shape) })) },
-    { label: 'Add Handy models', disabled: !!s.project, sub: HANDY.map(([label], i) => ({ label, action: () => void import('../plater/handy').then((m) => m.addHandyModel(i)) })) },
+    { label: 'Add Handy models', disabled: !!s.project, sub: [...HANDY.map(([label], i): Item => ({ label, action: () => void import('../plater/handy').then((m) => m.addHandyModel(i)) })),
+      ...(workflows.length ? ['sep' as const, ...workflows.map((w): Item => ({ label: w.label, action: () => void import('../plater/workflows').then((m) => m.loadWorkflow(w)) }))] : [])] },
     { label: 'Add SVG', disabled: !!s.project, action: () => void import('../plater/svg').then((m) => m.addSvg(null)) },
     { label: 'Add Models', shortcut: 'Ctrl+I', action: openFileDialog },
+    ...(advanced ? [{ label: 'Add assembly…', disabled: !!s.project, action: openAssemblyDialog }] : []),
     { label: 'Import from URL…', action: () => openUrlImport() },
     { label: 'Paste', shortcut: 'Ctrl+V', action: pasteClipboard, disabled: !canPaste(s) },
     'sep',

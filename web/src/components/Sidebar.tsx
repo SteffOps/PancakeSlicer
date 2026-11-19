@@ -37,6 +37,7 @@ import { urlProject } from '../flow/routes';
 import { noticeOf, projectSlots } from '../flow/project-slots';
 import { ProjectNoticeRow } from './ProjectNotice';
 import { RecordProblem } from '../profiles/RecordProblem';
+import { setAdvancedMode, useAdvancedMode } from '../staged';
 const SettingsTab = preloadable(() => import('./SettingsTab').then(m => ({default: m.SettingsTab})));
 
 function RailSection({title, summary, meta, actions, className = '', children}: {title: string; summary?: ReactNode; meta?: ReactNode; actions?: ReactNode; className?: string; children: ReactNode}) {
@@ -147,7 +148,9 @@ type Detail = (typeof DETAIL)[number][0];
 function ViewChoices() {
   const mode = useStore(effectiveMode), detail: Detail = mode === 'developer' ? 'develop' : mode;
   const setDetail = (id: Detail) => { savePreferences({'orca.settings_detail': id, 'orca.developer_mode': '0'}); setState({uiMode: id, developerMode: false}); };
-  const items: MenuEntry[] = DETAIL.map(([id, text]) => ({label: text, role: 'menuitemradio', checked: id === detail, action: () => setDetail(id)}));
+  const advanced = useAdvancedMode();
+  const items: MenuEntry[] = [...DETAIL.map(([id, text]): MenuEntry => ({label: text, role: 'menuitemradio', checked: id === detail, action: () => setDetail(id)})),
+    'sep', {label: 'Advanced mode', role: 'menuitemcheckbox', checked: advanced, action: () => setAdvancedMode(!advanced)}];
   const label = DETAIL.find(([id]) => id === detail)?.[1] ?? 'Simple';
   return <>
     <span className="rail-menus"><MenuButton className="rail-menu" label={`Settings detail: ${label}`} items={items}>{label}<Caret/></MenuButton></span>

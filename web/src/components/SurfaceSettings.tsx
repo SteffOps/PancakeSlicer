@@ -21,14 +21,16 @@ const openMethodChoice = (key: string) => {
   trigger?.focus(); trigger?.click();
 };
 import { MODE_LABELS, MODE_HELP as BASE_MODE_HELP } from '../nonplanar-mode';
+import { advancedMode, STAGED_MODE, useAdvancedMode } from '../staged';
 const OFFERED_MODES = ['off', 'nonplanar_top', 'smooth_morph', 'slant', 'conformal_layers', 'auto'], ROTARY_MODES = ['multiplanar', 'field'];
 const MODE_HELP: Record<string, string> = {
   ...BASE_MODE_HELP,
   multiplanar: 'Multiplanar: splits the model into tilted flat-layer sections so overhangs need fewer supports.',
   field: 'Rotary curved layers: prints the entire part in curved layers while the rotary table tilts to keep every pass level under the nozzle.',
+  staged: 'Staged regions (advanced): prints each part of the assembly in its own stage with its own layer style and nozzle pose.',
 };
 export function methodModes(current: string, availability: MethodAvailabilityResult): {enum_values: string[]; enum_labels: string[]; tooltip: string} {
-  const offered = [...OFFERED_MODES, ...availability.printer.rotary ? ROTARY_MODES : []];
+  const offered = [...OFFERED_MODES, ...availability.printer.rotary ? ROTARY_MODES : [], ...availability.printer.rotary && advancedMode() ? [STAGED_MODE] : []];
   const values = offered.includes(current) ? offered : [current, ...offered];
   const def = OPTIONS.nonplanar_mode;
   return {enum_values: values, enum_labels: values.map(v => MODE_LABELS[v] ?? def?.enum_labels?.[def.enum_values?.indexOf(v) ?? -1] ?? v),
@@ -77,6 +79,7 @@ const CLEARANCE_GROUP = 'Head clearance', TUNING_GROUP = 'Advanced non-planar';
 
 export function SurfaceSettings({config,system,availability,editor,unsaved,uiMode,legacyKeys = [],readOnly = false}: {config:Config;system:Config;availability:MethodAvailabilityResult;editor?:ProfileFields;unsaved:(key:string)=>boolean;uiMode:OptionMode;legacyKeys?:string[];readOnly?:boolean}) {
   const engine = useEngineHealth();
+  useAdvancedMode();
   useEffect(() => {void probeEngine();}, []);
   const mode = String(config.nonplanar_mode ?? '');
   const slantObject = useStore((s) => !!slantTarget(s));

@@ -164,6 +164,8 @@ export function PreviewView() {
   };
   const events = useStore((s) => s.events);
   const [eventMenu, setEventMenu] = useState<{ anchor: DOMRect; layer: number } | null>(null);
+  const [machineSim, setMachineSim] = useState(false);
+  const simAutoKey = useRef<string | null>(null);
   const [oneLayer, setOneLayer] = useState(false);
   const oneBackup = useRef<number | null>(null);
   const methods = !!useMethods();
@@ -328,14 +330,41 @@ export function PreviewView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [epoch]);
   useEffect(() => {
+    if (!data?.header) return;
+    const key = `${data.sourceUrl ?? ''}:${data.n}:${data.orientation.length > 0 ? 1 : 0}`;
+    if (simAutoKey.current !== key) {
+      simAutoKey.current = key;
+      setMachineSim(data.orientation.length > 0);
+    }
+  }, [data, data?.header, data?.orientation.length]);
+
+  useEffect(() => {
+    sceneRef.current?.setMachineSim(machineSim);
+  }, [machineSim, epoch]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || getState().tab !== 'preview') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        setMachineSim((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !data) return;
     const [s0] = layerCount ? data.layerSpan(lo, hi) : [1];
     const s1 = topFirst + pos;
     drawRange.current = [s0, s1];
-    scene.setDrawState({ range: [s0, s1], ...drawMasks(ui.vis, !!grid) }, pos < topMoves ? s1 - 1 : null);
+    scene.setDrawState({ range: [s0, s1], ...drawMasks(ui.vis, !!grid) }, (machineSim || pos < topMoves) && s1 > 0 ? s1 - 1 : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, data?.loaded, data?.done, lo, hi, pos, topFirst, topMoves, ui.vis, ui.surface, layerCount, job.status, grid, epoch]);
+  }, [data, data?.loaded, data?.done, lo, hi, pos, topFirst, topMoves, ui.vis, ui.surface, layerCount, job.status, grid, epoch, machineSim]);
 
   (window as unknown as { __preview: unknown }).__preview = {
     scene: sceneRef.current,
@@ -547,9 +576,10 @@ export function PreviewView() {
       )}
       {layerCount > 0 && topMoves > 0 && (
         <OrderBar data={data!} at={topFirst + pos - 1} onSeek={seekOrder}
-          gcodeOpen={gcodeWindow} onGcode={() => toggleViewOption('gcodeWindow')} oneLayer={oneLayer} onOneLayer={toggleOneLayer} />
+          gcodeOpen={gcodeWindow} onGcode={() => toggleViewOption('gcodeWindow')} oneLayer={oneLayer} onOneLayer={toggleOneLayer}
+          machineSim={machineSim} onMachineSim={() => setMachineSim((v) => !v)} />
       )}
-      {layerCount > 0 && pos < topMoves && data!.states && topFirst + pos - 1 < data!.loaded && (
+      {layerCount > 0 && (machineSim || pos < topMoves) && data!.states && topFirst + pos - 1 < data!.loaded && (
         <Suspense fallback={null}><ToolPosition data={data!} at={topFirst + pos - 1} view={ui.view} /></Suspense>
       )}
       {gcodeWindow && layerCount > 0 && topMoves > 0 && (

@@ -21,6 +21,7 @@ import { shortTime } from './preview/format';
 import { calibProject, firstLayer, jobFields, outputKind, plateSignature } from './slice-input';
 import { arrange, bakeStl, bedBounds, instanceBox, loadMesh, loadProject, nextFreeSpot, parsePoints, plateJson, outsideBed } from './plater/geometry';
 import { projectEdits } from './plater/projectTransforms';
+import { stagedOrigin } from './staged';
 import { confirmDialog, numberDialog, promptDialog } from './components/Ask';
 import {
   IDLE_JOB, PRESET_META, effectiveConfig, getState, markStale, newId, presetEdits, printerPreset, resolvePreset, selectPrinter, setState, toast, type JobView, type PlateObject, type State,
@@ -126,6 +127,8 @@ export function bedArea() {
   return parsePoints(printerPreset(getState())?.config.printable_area);
 }
 
+const plateOverhang = (s = getState()) => ['1', 'true'].includes(String(printerPreset(s)?.config.rotary_plate_overhang ?? ''));
+
 export async function printerBed(): Promise<THREE.Vector2[]> {
   const answer = await (await import('./flow/resolved')).selectionAnswer();
   const area = parsePoints(answer.printer.values.printable_area);
@@ -202,10 +205,11 @@ export async function importFiles(files: FileList | File[], opts: { sourceUrl?: 
 async function loadStep(f: File, signal?: AbortSignal): Promise<{ geometry: THREE.BufferGeometry; source: File }> {
   const s = getState();
   if (!s.api || s.api.mock) throw new Error(`Oops! Importing STEP files (${f.name}) requires a connection to the slicing service.`);
-  return withBusy(`Loading ${f.name}`, () => meshStep(s, f, signal), signal);
+  return withBusy(`Loading ${f.name}`, () => meshStep(f, signal), signal);
 }
-async function meshStep(s: ReturnType<typeof getState>, f: File, signal?: AbortSignal): Promise<{ geometry: THREE.BufferGeometry; source: File }> {
-  if (!s.api) throw new Error(`Oops! Importing STEP files (${f.name}) requires a connection to the slicing service.`);
+export async function convertStep(f: File, signal?: AbortSignal): Promise<File> {
+  const s = getState();
+  if (!s.api || s.api.mock) throw new Error(`Oops! Importing STEP files (${f.name}) requires a connection to the slicing service.`);
   const { library } = jobFields(s, true);
   const id = await s.api.submit({ library: { ...library, filaments: [], slots: [] }, project: {}, events: [], output: '3mf', files: [{ name: f.name, blob: f }] }, signal);
   if (signal?.aborted) { void s.api.cancel(id).catch(() => {}); throw new DOMException('Import canceled', 'AbortError'); }
@@ -221,9 +225,12 @@ async function meshStep(s: ReturnType<typeof getState>, f: File, signal?: AbortS
   });
   const response = await fetch(s.api.downloadUrl(id), { signal });
   if (!response.ok) throw new Error(`${f.name}: ${response.status} ${response.statusText}`);
-  const stem = f.name.replace(/\.(step|stp|drc)$/i, '');
+  return new File([await response.blob()], `${f.name.replace(/\.(step|stp|drc)$/i, '')}.3mf`);
+}
+async function meshStep(f: File, signal?: AbortSignal): Promise<{ geometry: THREE.BufferGeometry; source: File }> {
+  const converted = await convertStep(f, signal), stem = converted.name.replace(/\.3mf$/, '');
   let geometry: THREE.BufferGeometry | undefined;
-  await loadProject(new File([await response.blob()], `${stem}.3mf`), { items() {}, mesh: (i, g) => { if (i === 0) geometry = g; }, missing() {} });
+  await loadProject(converted, { items() {}, mesh: (i, g) => { if (i === 0) geometry = g; }, missing() {} });
   if (!geometry) throw new Error(`Oops! We couldn't find any 3D geometry inside ${f.name}.`);
   const mesh = { geometry, rotX: 0, rotY: 0, scale: [1, 1, 1] } as PlateObject;
   return { geometry, source: new File([await bakeStl(mesh)], `${stem}.stl`) };
@@ -347,7 +354,7 @@ export function fillBed() {
   const src = o.instances[o.instances.length - 1];
   const withCopies = (n: number) => arrange(s.objects.map((ob) => ob.id !== o.id ? ob : { ...ob, instances: [...ob.instances,
     ...Array.from({ length: n }, () => ({ id: newId(), x: src.x, y: src.y, rotZ: src.rotZ, z: src.z, printable: src.printable }))] }), area);
-  const fits = (objects: PlateObject[]) => outsideBed(objects, area, Infinity).size === 0;
+  const fits = (objects: PlateObject[]) => outsideBed(objects, area, Infinity, plateOverhang(s)).size === 0;
   let lo = 0, hi = 1;
   let best = withCopies(0);
   if (!fits(best)) return toast('plate_full_theres_no');
@@ -394,12 +401,12 @@ export async function jobRequest(s = getState(), saving = false): Promise<JobReq
   }
   if (saving && (s.projectPlates.length > 1 || s.projectPlates.some((p) => Object.keys(p.settings).length || p.name || p.locked))) {
     const plates = currentPlates(s);
-    const { plate, files } = await plateJson(plates.flatMap((p) => p.objects), firstLayer(s));
+    const { plate, files } = await plateJson(plates.flatMap((p) => p.objects), firstLayer(s), stagedOrigin(s));
     plates.flatMap((p) => p.objects.map(() => p.index)).forEach((index, k) => { plate.objects[k].plate = index; });
     plate.plates = plates.map((p) => ({ index: p.index, name: p.name, settings: Object.fromEntries(Object.entries(p.settings).map(([k, v]) => [k, String(v)])), ...(p.locked ? { locked: true } : {}) }));
     return { ...fields, plate, files };
   }
-  const { plate, files } = await plateJson(s.objects, firstLayer(s));
+  const { plate, files } = await plateJson(s.objects, firstLayer(s), stagedOrigin(s));
   return { ...fields, plate, files };
 }
 
@@ -422,7 +429,7 @@ export function outsideVolumeWarning(s = getState()): string | null {
   const objects = s.objects.filter((o) => !o.project?.placeholder);
   if (!objects.length) return null;
   const area = parsePoints(machine.config.printable_area), height = Number(machine.config.printable_height ?? 1e6);
-  const outside = outsideBed(objects, area, height), bed = bedBounds(area), xy = (v: { x: number; y: number }) => `[${v.x.toFixed(3)}, ${v.y.toFixed(3)}]`;
+  const outside = outsideBed(objects, area, height, plateOverhang(s)), bed = bedBounds(area), xy = (v: { x: number; y: number }) => `[${v.x.toFixed(3)}, ${v.y.toFixed(3)}]`;
   const lines = objects.flatMap((o) => o.instances.filter((i) => outside.has(i.id)).slice(0, 1).map((i) => {
     const b = instanceBox(o, i);
     return b.max.z > height + 1e-3 ? `${o.name} is ${b.max.z.toFixed(1)} mm tall; the printer prints up to ${height} mm.`

@@ -85,8 +85,21 @@ export default function ToolPosition({ data, at, view }: { data: PreviewData; at
         <button type="button" className="tool-fold" title={shown ? 'Hide properties' : 'Show properties'} aria-expanded={shown}
           onClick={() => { shownDefault = !shown; setShown(!shown); }}><Caret dir={shown ? 'down' : 'up'}/></button>
         <div>
-          <div className="tool-axes">
+          <div className="tool-axes" data-fiveaxis={data.orientation.length > 0 ? '1' : undefined}>
             {(['x', 'y', 'z'] as const).map((a, k) => <span key={a}><span className={`axis ${a}`}>{a.toUpperCase()} </span>{p[k].toFixed(digits)}</span>)}
+            {data.orientation.length > 0 && (() => {
+              const base = i * 3;
+              const aDeg = data.orientation[base] ?? 0;
+              const bDeg = data.orientation[base + 1] ?? 0;
+              const cDeg = data.orientation[base + 2] ?? 0;
+              if (data.header?.tableAC) {
+                return <><span><span className="axis">A </span>{aDeg.toFixed(1)}°</span><span><span className="axis">C </span>{cDeg.toFixed(1)}°</span></>;
+              }
+              if (data.header?.tableRotary) {
+                return <><span><span className="axis">U </span>{bDeg.toFixed(1)}°</span><span><span className="axis">V </span>{cDeg.toFixed(1)}°</span></>;
+              }
+              return <><span><span className="axis">B </span>{bDeg.toFixed(1)}°</span><span><span className="axis">C </span>{cDeg.toFixed(1)}°</span></>;
+            })()}
           </div>
           <div className="tool-detail"><span>Speed: {data.feed[i].toFixed(0)}</span>{detail && <span>{detail}</span>}</div>
         </div>

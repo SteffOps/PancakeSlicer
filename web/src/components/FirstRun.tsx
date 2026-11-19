@@ -13,6 +13,13 @@ import { openSetup } from '../onboarding/setup-flow';
 import { documentGeneration, onLeaveDocument } from '../state/history';
 import './first-run.css';
 import { slotFilaments } from '../profiles/slots';
+import { setAdvancedMode } from '../staged';
+import { useWorkflows, type SampleWorkflow } from '../plater/workflow-list';
+
+function shortWorkflowLabel(label: string) {
+  const clean = label.replace(/^5-axis:\s*/i, '').trim();
+  return clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : label;
+}
 
 const SETUP_KEY = 'orca.setup';
 const assets = import.meta.glob<string>('../samples/*.{drc,webp}', { eager: true, query: '?url', import: 'default' });
@@ -121,6 +128,21 @@ const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
 
 function DropZone() {
   useEffect(warmSamples, []);
+  const workflows = useWorkflows(true);
+  const [busyWf, setBusyWf] = useState<string | null>(null);
+  const pickWorkflow = async (w: SampleWorkflow) => {
+    if (busyWf) return;
+    setBusyWf(w.id);
+    try {
+      setAdvancedMode(true);
+      const { loadWorkflow } = await import('../plater/workflows');
+      await loadWorkflow(w);
+    } catch (e) {
+      toast('couldnt_load_2', { label: w.label, detail: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyWf(null);
+    }
+  };
   return (
     <div className="fr-drop">
       <div className="fr-drop-title">Drop a model</div>
@@ -136,6 +158,17 @@ function DropZone() {
         <span>or try</span>
         {SAMPLES.map((s) => <Sample key={s.label} {...s} />)}
       </div>
+      {[['Advanced', workflows.filter((w) => !w.id.endsWith('_large'))], ['Advanced (large)', workflows.filter((w) => w.id.endsWith('_large'))]].map(([tag, list]) => (list as SampleWorkflow[]).length > 0 && (
+        <div key={tag as string} className="fr-samples fr-advanced" aria-label={`${tag} 5-axis workflows`}>
+          <span className="fr-adv-tag">{tag as string}</span>
+          {(list as SampleWorkflow[]).map((w) => (
+            <button key={w.id} type="button" className="fr-sample" title={w.label}
+              data-busy={busyWf === w.id || undefined} aria-busy={busyWf === w.id || undefined}
+              disabled={busyWf !== null}
+              onClick={() => void pickWorkflow(w)}>{shortWorkflowLabel(w.label)}</button>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
