@@ -1,0 +1,67 @@
+{
+  "id": "balancing_falcon",
+  "label": "5-axis: 115° balancing falcon",
+  "printer": "GoetheLab 5axisFDM 0.4 nozzle",
+  "process": {
+    "layer_height": "0.24",
+    "initial_layer_print_height": "0.24",
+    "wall_loops": "2",
+    "sparse_infill_density": "100%",
+    "top_shell_layers": "3",
+    "bottom_shell_layers": "3",
+    "nonplanar_mode": "staged",
+    "staged_stage": "1",
+    "staged_layer_style": "flat",
+    "staged_axis_dir": "0,0,1",
+    "staged_tool": "follow",
+    "enable_support": "0",
+    "brim_type": "no_brim",
+    "skirt_loops": "0",
+    "outer_wall_speed": "40",
+    "inner_wall_speed": "40",
+    "sparse_infill_speed": "40",
+    "internal_solid_infill_speed": "40",
+    "top_surface_speed": "40",
+    "initial_layer_speed": "25",
+    "initial_layer_infill_speed": "25"
+  },
+  "parts": [
+    {
+      "file": "falcon_body.stl",
+      "name": "Falcon body",
+      "settings": {
+        "staged_stage": "1",
+        "staged_layer_style": "flat",
+        "staged_axis_point": "0,0,0",
+        "staged_axis_dir": "0,0,1",
+        "staged_tool": "follow"
+      }
+    },
+    {
+      "file": "falcon_wing_r.stl",
+      "name": "Right wing",
+      "settings": {
+        "staged_stage": "2",
+        "staged_layer_style": "hinge",
+        "staged_axis_point": "27,0,30",
+        "staged_axis_dir": "0,1,0",
+        "staged_hinge_start": "0,0,1",
+        "staged_hinge_angle": "115",
+        "staged_tool": "follow"
+      }
+    },
+    {
+      "file": "falcon_wing_l.stl",
+      "name": "Left wing",
+      "settings": {
+        "staged_stage": "3",
+        "staged_layer_style": "hinge",
+        "staged_axis_point": "-27,0,30",
+        "staged_axis_dir": "0,-1,0",
+        "staged_hinge_start": "0,0,1",
+        "staged_hinge_angle": "115",
+        "staged_tool": "follow"
+      }
+    }
+  ]
+}

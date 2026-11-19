@@ -1,0 +1,59 @@
+{
+  "label": "5-axis: tri-branch mixer",
+  "printer": "GoetheLab 5axisFDM 0.4 nozzle",
+  "process": {
+    "nonplanar_mode": "staged",
+    "layer_height": "0.2412",
+    "initial_layer_print_height": "0.2412",
+    "line_width": "0.5",
+    "initial_layer_line_width": "0.5",
+    "outer_wall_line_width": "0.5",
+    "inner_wall_line_width": "0.5",
+    "sparse_infill_line_width": "0.5",
+    "internal_solid_infill_line_width": "0.5",
+    "top_surface_line_width": "0.5",
+    "wall_loops": "2",
+    "sparse_infill_density": "100%",
+    "sparse_infill_pattern": "concentric",
+    "internal_solid_infill_pattern": "concentric",
+    "top_surface_pattern": "concentric",
+    "bottom_surface_pattern": "concentric",
+    "enable_support": "0"
+  },
+  "parts": [
+    {
+      "file": "large_mixer_trunk.stl",
+      "name": "Trunk",
+      "settings": {
+        "staged_stage": "1",
+        "staged_layer_style": "flat",
+        "staged_axis_point": "0,0,0",
+        "staged_axis_dir": "0,0,1",
+        "staged_hinge_start": "0,0,1",
+        "staged_hinge_angle": "90",
+        "staged_cone_half_angle": "45",
+        "staged_cone_radius": "0",
+        "staged_tool": "follow",
+        "staged_tool_tilt": "0",
+        "staged_copies": "1"
+      }
+    },
+    {
+      "file": "large_mixer_branch.stl",
+      "name": "Branch",
+      "settings": {
+        "staged_stage": "2",
+        "staged_layer_style": "hinge",
+        "staged_axis_point": "39.69,0,15.435",
+        "staged_axis_dir": "0,1,0",
+        "staged_hinge_start": "0,0,1",
+        "staged_hinge_angle": "62",
+        "staged_cone_half_angle": "45",
+        "staged_cone_radius": "0",
+        "staged_tool": "follow",
+        "staged_tool_tilt": "0",
+        "staged_copies": "3"
+      }
+    }
+  ]
+}

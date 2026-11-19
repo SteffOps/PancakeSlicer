@@ -1,0 +1,52 @@
+{
+  "id": "benchy_tilted_large",
+  "label": "5-axis: gravity-defying Benchy",
+  "printer": "GoetheLab 5axisFDM 0.4 nozzle",
+  "process": {
+    "layer_height": "0.24",
+    "initial_layer_print_height": "0.24",
+    "wall_loops": "2",
+    "sparse_infill_density": "25%",
+    "top_shell_layers": "3",
+    "bottom_shell_layers": "3",
+    "nonplanar_mode": "staged",
+    "staged_stage": "1",
+    "staged_layer_style": "flat",
+    "staged_axis_dir": "0,0,1",
+    "staged_tool": "follow",
+    "enable_support": "0",
+    "brim_type": "no_brim",
+    "skirt_loops": "0",
+    "outer_wall_speed": "40",
+    "inner_wall_speed": "40",
+    "sparse_infill_speed": "40",
+    "internal_solid_infill_speed": "40",
+    "top_surface_speed": "40",
+    "initial_layer_speed": "25",
+    "initial_layer_infill_speed": "25"
+  },
+  "parts": [
+    {
+      "file": "large_benchy_pedestal.stl",
+      "name": "Pedestal",
+      "settings": {
+        "staged_stage": "1",
+        "staged_layer_style": "flat",
+        "staged_axis_point": "0,0,0",
+        "staged_axis_dir": "0,0,1",
+        "staged_tool": "follow"
+      }
+    },
+    {
+      "file": "large_benchy_tilted.stl",
+      "name": "Benchy",
+      "settings": {
+        "staged_stage": "2",
+        "staged_layer_style": "flat",
+        "staged_axis_point": "-29.4464,0,11.1294",
+        "staged_axis_dir": "-0.819152,0.000000,0.573576",
+        "staged_tool": "follow"
+      }
+    }
+  ]
+}
