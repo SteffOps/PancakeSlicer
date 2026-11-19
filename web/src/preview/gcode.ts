@@ -39,6 +39,7 @@ export function gcodeToStream(text: string): ArrayBuffer {
   const vector = (key: string, count: number) => Array.from({ length: count }, (_, i) => Number((config.get(key) ?? '').split(',')[i]) || 0);
   const home = vector('rotary_axis_home', 2), reversed = vector('rotary_axis_reversed', 2);
   const pivot = vector('rotary_pivot', 3), mount = vector('rotary_tool_mount', 3), tableMoves = vector('rotary_linear_moves_table', 3);
+  const slots = [...(layout.endsWith('ab') ? 'AB' : layout.endsWith('ac') ? 'AC' : 'BC')].map((l) => 'ABC'.indexOf(l));
   const toolLength = Number(config.get('rotary_tool_length')) || 0, tableHeight = Number(config.get('rotary_table_height')) || 0;
   const toTip = (x: number, y: number, z: number, pose: number[]): [number, number, number] => {
     if (!rotary || config.get('rotary_firmware_rtcp') === '1') return [x, y, z];
@@ -102,7 +103,11 @@ export function gcodeToStream(text: string): ArrayBuffer {
     const values = [...tip, de, feed, w, h, mm3, time];
     for (let k = 0; k < values.length; ++k) page.setFloat32(o + 8 + k * 4, values[k], true);
     if (oriented) {
-      for (let k = 0; k < 3; ++k) page.setFloat32(o + 52 + k * 4, pose[k], true);
+      // Rotary jobs store kinematic angles, as the engine's move stream does: home offset and reversed direction removed.
+      for (let k = 0; k < 3; ++k) {
+        const r = rotary ? slots.indexOf(k) : -1;
+        page.setFloat32(o + 52 + k * 4, r < 0 ? pose[k] : (pose[k] - home[r]) * (reversed[r] ? -1 : 1), true);
+      }
       page.setFloat32(o + 64, inverse ? f : 0, true);
     }
     page.setUint32(o + 44, layerId, true); page.setUint32(o + 48, state, true);
