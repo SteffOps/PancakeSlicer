@@ -3,6 +3,8 @@ import type { PreviewData } from '../preview/data';
 import type { ViewType } from '../preview/colors';
 import { MoveType, ROLE_NAMES } from '../preview/format';
 import { Caret } from './Caret';
+import { useStore } from '../state/store';
+import { selectionValues } from '../profiles/view';
 
 const TYPE_NAMES = ['Noop', 'Retract', 'Unretract', 'Seam', 'Tool change', 'Color change', 'Pause print', 'Custom G-code', 'Travel', 'Wipe', 'Extrude'];
 const NA = 'N/A';
@@ -15,6 +17,12 @@ function dhms(t: number) {
 
 export default function ToolPosition({ data, at, view }: { data: PreviewData; at: number; view: ViewType }) {
   const [shown, setShown] = useState(shownDefault);
+  // The move stream carries kinematic table angles; the readout shows the commanded axis values, as in the G-code.
+  const machine = useStore((st) => selectionValues(st, 'machine')).values;
+  const axisValue = (k: number, deg: number) => {
+    const vector = (key: string) => Number(String(machine[key] ?? '').split(',')[k]) || 0;
+    return vector('rotary_axis_home') + (vector('rotary_axis_reversed') ? -deg : deg);
+  };
   const elapsed = useMemo(() => {
     const e = new Float64Array(data.loaded);
     for (let i = 1; i < data.loaded; ++i) e[i] = e[i - 1] + data.time[i];
@@ -96,7 +104,7 @@ export default function ToolPosition({ data, at, view }: { data: PreviewData; at
                 return <><span><span className="axis">A </span>{aDeg.toFixed(1)}°</span><span><span className="axis">C </span>{cDeg.toFixed(1)}°</span></>;
               }
               if (data.header?.tableRotary) {
-                return <><span><span className="axis">U </span>{bDeg.toFixed(1)}°</span><span><span className="axis">V </span>{cDeg.toFixed(1)}°</span></>;
+                return <><span><span className="axis">U </span>{axisValue(0, bDeg).toFixed(1)}°</span><span><span className="axis">V </span>{axisValue(1, cDeg).toFixed(1)}°</span></>;
               }
               return <><span><span className="axis">B </span>{bDeg.toFixed(1)}°</span><span><span className="axis">C </span>{cDeg.toFixed(1)}°</span></>;
             })()}
