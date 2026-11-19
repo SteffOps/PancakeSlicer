@@ -145,6 +145,8 @@ func NewServer(c Config, jobs *JobManager, catalog *resolve.Catalog) http.Handle
 		mux.HandleFunc("POST /api/dev/reset", s.devReset)
 	}
 	mux.HandleFunc("GET /api/handy-models/{name}", s.handyModel)
+	mux.HandleFunc("GET /api/handy-models/5axis/{name}", s.handyWorkflowPiece)
+	mux.HandleFunc("GET /api/handy-workflows", s.handyWorkflows)
 	mux.HandleFunc("GET /api/emboss-fonts", s.embossFonts)
 	mux.HandleFunc("GET /api/user-heads", s.listUserHeads)
 	mux.HandleFunc("POST /api/user-heads", s.saveUserHead)
@@ -1246,7 +1248,11 @@ func (s *Server) handyModel(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "unrecognized_built_sample_model")
 		return
 	}
-	f, err := os.Open(filepath.Join(s.cfg.Resources, "handy_models", name))
+	serveHandyFile(w, r, filepath.Join(s.cfg.Resources, "handy_models", name), name)
+}
+
+func serveHandyFile(w http.ResponseWriter, r *http.Request, file, name string) {
+	f, err := os.Open(file)
 	if err != nil {
 		fail(w, 404, "built_sample_model_isnt")
 		return

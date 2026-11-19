@@ -77,6 +77,14 @@
       ]
     },
     {
+      "id": "staged",
+      "target": "mode",
+      "hardware": "rotary",
+      "settingPrefixes": [
+        "staged_"
+      ]
+    },
+    {
       "id": "whole",
       "target": "wave",
       "hardware": "known",
