@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 type shareEntry struct {
@@ -40,6 +41,10 @@ func shareFileName(name string) bool {
 	return false
 }
 
+func shareFolderName(name string) bool {
+	return len(name) <= 120 && strings.Trim(name, " .") != "" && !strings.ContainsFunc(name, unicode.IsControl)
+}
+
 func sharePath(p string) (string, bool) {
 	if p == "" {
 		return ".", true
@@ -62,6 +67,7 @@ func (s *Server) shareRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/share", s.listShare)
 	mux.HandleFunc("GET /api/share/file", s.readShare)
 	mux.HandleFunc("PUT /api/share/file", s.writeShare)
+	mux.HandleFunc("POST /api/share/folder", s.makeShareFolder)
 }
 
 func (s *Server) shareBase(w http.ResponseWriter, r *http.Request) string {
@@ -245,6 +251,46 @@ func (s *Server) writeShare(w http.ResponseWriter, r *http.Request) {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
 			fail(w, http.StatusRequestEntityTooLarge, "upload_larger_than_servers")
+		} else {
+			fail(w, 500, "share_write_failed", err.Error())
+		}
+		return
+	}
+	st, err := os.Stat(target)
+	if err != nil {
+		fail(w, 500, "share_write_failed", err.Error())
+		return
+	}
+	writeJSON(w, 200, shareInfo(filepath.Base(name), st))
+}
+
+func (s *Server) makeShareFolder(w http.ResponseWriter, r *http.Request) {
+	name, ok := sharePath(r.URL.Query().Get("path"))
+	if !ok || name == "." {
+		fail(w, 400, "share_path_invalid")
+		return
+	}
+	if !shareFolderName(filepath.Base(name)) {
+		fail(w, 400, "share_folder_name_invalid")
+		return
+	}
+	base := s.shareBase(w, r)
+	if base == "" {
+		return
+	}
+	dir, err := shareResolve(base, filepath.Dir(name))
+	if err != nil {
+		shareFailure(w, err)
+		return
+	}
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		fail(w, 400, "share_not_folder")
+		return
+	}
+	target := filepath.Join(dir, filepath.Base(name))
+	if err := os.Mkdir(target, 0o755); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			fail(w, 409, "share_folder_exists")
 		} else {
 			fail(w, 500, "share_write_failed", err.Error())
 		}

@@ -242,6 +242,8 @@ var failureTexts = map[string]failureText{
 	"send_request_exceeds_kib":             {Text: "send request exceeds 4 KiB"},
 	"server_couldnt_save_uploaded":         {Text: "Oops! The server couldn't save the uploaded file."},
 	"share_file_exists":                    {Text: "A file with that name is already in the shared folder.", Step: "Pick another name, or replace the file."},
+	"share_folder_exists":                  {Text: "A folder or file with that name is already in the shared folder.", Step: "Pick another name."},
+	"share_folder_name_invalid":            {Text: "Folder names can't be empty, longer than 120 bytes or contain control characters."},
 	"share_not_file":                       {Text: "That isn't a file in the shared folder."},
 	"share_not_folder":                     {Text: "That isn't a folder in the shared folder."},
 	"share_not_found":                      {Text: "That file or folder isn't in the shared folder anymore."},
