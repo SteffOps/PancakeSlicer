@@ -71,7 +71,7 @@ func (s *Server) shareRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) shareBase(w http.ResponseWriter, r *http.Request) string {
-	if r.Method == "GET" && s.cfg.BearerToken != "" && !s.authorized(r) {
+	if s.cfg.BearerToken != "" && !s.authorized(r) {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		fail(w, 401, "access_token_required")
 		return ""
