@@ -1,6 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
-import { responseError } from '../api/access';
+import { promptDialog } from './Ask';
+import { mutation, responseError } from '../api/access';
+import { toast } from '../state/store';
 
 export interface ShareEntry { name: string; dir?: boolean; size: number; modified: number }
 export interface SharePick { paths: string[]; name: string; exists: boolean }
@@ -21,6 +23,11 @@ export const browseShare = (b: Omit<Browse, 'resolve'>) =>
 
 const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 const size = (n: number) => n < 1e6 ? `${Math.max(1, Math.round(n / 1e3))} KB` : `${(n / 1e6).toFixed(1)} MB`;
+const folderProblem = (v: string) => !v.replace(/[ .]/g, '') ? 'Enter a name.'
+  : /[/\\]/.test(v) || v.startsWith('.') ? 'Names can\'t contain slashes or start with a dot.'
+  : ['@eaDir', '#recycle', '#snapshot'].includes(v) ? 'That name is reserved.'
+  : /\p{Cc}/u.test(v) ? 'Names can\'t contain control characters.'
+  : new TextEncoder().encode(v).length > 120 ? 'That name is too long.' : null;
 
 function SharedFolderDialog({ b }: { b: Browse }) {
   const [dir, setDir] = useState('');
@@ -57,16 +64,29 @@ function SharedFolderDialog({ b }: { b: Browse }) {
     setPicked(b.multiple ? (picked.includes(e.name) ? picked.filter((p) => p !== e.name) : [...picked, e.name]) : [e.name]);
   };
   const parts = dir ? dir.split('/') : [];
+  const newFolder = async () => {
+    const folder = await promptDialog('New folder', 'New folder', folderProblem, 'Create');
+    if (!folder) return;
+    try {
+      await mutation(`/api/share/folder?path=${encodeURIComponent(join(dir, folder))}`, { method: 'POST' }, false, undefined, undefined, true);
+      setDir(join(dir, folder));
+    } catch (e) {
+      toast('couldnt_create_folder', { detail: e instanceof Error ? e.message : String(e) });
+    }
+  };
   return (
     <Modal size="m" label={b.title} onClose={() => done(null)}>
       <form method="dialog" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <ModalTitle title={b.title} onClose={() => done(null)} />
         <ModalBody>
-          <nav className="share-crumbs" aria-label="Folder">
-            {['Shared folder', ...parts].map((p, i) => i === parts.length
-              ? <span key={i} aria-current="page">{p}</span>
-              : <span key={i}><button type="button" className="link" onClick={() => setDir(parts.slice(0, i).join('/'))}>{p}</button> /</span>)}
-          </nav>
+          <div className="share-bar">
+            <nav className="share-crumbs" aria-label="Folder">
+              {['Shared folder', ...parts].map((p, i) => i === parts.length
+                ? <span key={i} aria-current="page">{p}</span>
+                : <span key={i}><button type="button" className="link" onClick={() => setDir(parts.slice(0, i).join('/'))}>{p}</button> /</span>)}
+            </nav>
+            <button type="button" className="btn" disabled={!entries} onClick={() => void newFolder()}>New folder</button>
+          </div>
           <div className="share-list" role="listbox" aria-label={b.title} aria-multiselectable={b.multiple || undefined}>
             {error ? <p className="modal-error" role="alert">{error}</p>
               : !entries ? <p className="share-empty">Loading…</p>
